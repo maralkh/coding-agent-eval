@@ -172,9 +172,15 @@ class LLMClient:
         
         kwargs = {
             "model": self.model,
-            "max_tokens": max_tokens,
             "messages": oai_messages,
         }
+        
+        # o-series models (o1, o3, o4) use max_completion_tokens instead of max_tokens
+        is_o_series = self.model.startswith(("o1", "o3", "o4"))
+        if is_o_series:
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
         
         # Convert tools to OpenAI format
         if tools:

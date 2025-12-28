@@ -94,6 +94,46 @@ def write_file(path: str, content: str, repo_root: str) -> str:
         return f"Error writing file: {e}"
 
 
+def str_replace_in_file(path: str, old_str: str, new_str: str, repo_root: str) -> str:
+    """Replace a specific string in a file. The old_str must appear exactly once."""
+    # Normalize path
+    path = path.lstrip("/")
+    repo_root_stripped = repo_root.lstrip("/")
+    if path.startswith(repo_root_stripped):
+        path = path[len(repo_root_stripped):].lstrip("/")
+    
+    full_path = Path(repo_root) / path
+    
+    if not full_path.exists():
+        return f"Error: File not found: {path}"
+    
+    try:
+        content = full_path.read_text()
+        
+        # Count occurrences
+        count = content.count(old_str)
+        
+        if count == 0:
+            # Show a preview of the file to help debug
+            lines = content.split('\n')
+            preview = '\n'.join(lines[:20])
+            return f"Error: String not found in {path}. File starts with:\n{preview}\n..."
+        elif count > 1:
+            return f"Error: String appears {count} times in {path}. It must appear exactly once. Make the search string more specific."
+        
+        # Replace
+        new_content = content.replace(old_str, new_str)
+        full_path.write_text(new_content)
+        
+        # Count lines changed
+        old_lines = len(old_str.split('\n'))
+        new_lines = len(new_str.split('\n'))
+        
+        return f"Successfully replaced {old_lines} line(s) with {new_lines} line(s) in {path}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def list_directory(path: str, repo_root: str) -> str:
     """List contents of a directory."""
     full_path = Path(repo_root) / path if path else Path(repo_root)
@@ -156,7 +196,7 @@ REPO_TOOLS = [
     },
     {
         "name": "write_file",
-        "description": "Write content to a file in the repository. Creates parent directories if needed.",
+        "description": "Write content to a file in the repository. Creates parent directories if needed. WARNING: This overwrites the entire file. For small edits, use str_replace_in_file instead.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -170,6 +210,28 @@ REPO_TOOLS = [
                 },
             },
             "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "str_replace_in_file",
+        "description": "Replace a specific string in a file with new content. The old_str must appear exactly once in the file. This is the preferred way to make targeted edits.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file relative to repository root",
+                },
+                "old_str": {
+                    "type": "string",
+                    "description": "The exact string to replace (must appear exactly once in the file)",
+                },
+                "new_str": {
+                    "type": "string",
+                    "description": "The new string to replace it with",
+                },
+            },
+            "required": ["path", "old_str", "new_str"],
         },
     },
     {
@@ -251,36 +313,85 @@ REPO_TOOLS = [
 
 def run_repo_tool(name: str, input_data: dict, repo_root: str) -> str:
     """Execute a repository tool and return the result."""
-    # Debug: print tool calls
+    # Debug: print tool name
     print(f"    [Tool: {name}]", end="")
-    if name == "read_file":
-        print(f" path={input_data.get('path', 'N/A')}")
-    elif name == "write_file":
-        print(f" path={input_data.get('path', 'N/A')} ({len(input_data.get('content', ''))} chars)")
-    else:
-        print()
     
     if name == "read_file":
-        return read_file(input_data["path"], repo_root)
+        path = input_data.get("path") or input_data.get("file_path") or input_data.get("file")
+        if not path:
+            return "Error: Missing 'path' parameter"
+        print(f" path={path}")
+        result = read_file(path, repo_root)
+        # Debug: show preview of result
+        preview = result[:100].replace('\n', '\\n') if len(result) > 100 else result.replace('\n', '\\n')
+        print(f"      [Result preview: {preview}...]")
+        return result
 
     elif name == "write_file":
-        return write_file(input_data["path"], input_data["content"], repo_root)
+        path = input_data.get("path") or input_data.get("file_path") or input_data.get("file")
+        content = input_data.get("content") or input_data.get("contents") or input_data.get("text") or ""
+        
+        if not path:
+            return "Error: Missing 'path' parameter"
+        
+        print(f" path={path} ({len(content)} chars)")
+        result = write_file(path, content, repo_root)
+        print(f"      [Result: {result}]")
+        return result
+
+    elif name == "str_replace_in_file":
+        # Debug: show what parameters we received
+        print(f" keys={list(input_data.keys())}")
+        
+        # Handle different parameter names the model might use
+        path = input_data.get("path") or input_data.get("file_path") or input_data.get("file")
+        old_str = input_data.get("old_str") or input_data.get("old") or input_data.get("search") or input_data.get("find") or input_data.get("original")
+        new_str = input_data.get("new_str") or input_data.get("new") or input_data.get("replace") or input_data.get("replacement")
+        
+        print(f"      path={path}, old_str={len(old_str) if old_str else 0} chars, new_str={len(new_str) if new_str else 0} chars")
+        
+        if not path:
+            return "Error: Missing 'path' parameter"
+        if old_str is None:
+            return f"Error: Missing 'old_str' parameter. Got keys: {list(input_data.keys())}"
+        if new_str is None:
+            return f"Error: Missing 'new_str' parameter. Got keys: {list(input_data.keys())}"
+        
+        result = str_replace_in_file(path, old_str, new_str, repo_root)
+        print(f"      [Result: {result}]")
+        return result
 
     elif name == "list_directory":
-        return list_directory(input_data.get("path", ""), repo_root)
+        path = input_data.get("path") or input_data.get("dir") or input_data.get("directory") or ""
+        print(f" path={path}")
+        result = list_directory(path, repo_root)
+        print(f"      [Result: {result[:200]}...]" if len(result) > 200 else f"      [Result: {result}]")
+        return result
 
     elif name == "search_code":
-        return search_code(
-            input_data["pattern"],
-            repo_root,
-            input_data.get("file_pattern", "*.py"),
-        )
+        pattern = input_data.get("pattern") or input_data.get("query") or input_data.get("search")
+        file_pattern = input_data.get("file_pattern") or input_data.get("glob") or "*.py"
+        print(f" pattern='{pattern}' file_pattern='{file_pattern}'")
+        if not pattern:
+            return "Error: Missing 'pattern' parameter"
+        result = search_code(pattern, repo_root, file_pattern)
+        preview = result[:200] if len(result) > 200 else result
+        print(f"      [Result: {preview}...]")
+        return result
 
     elif name == "run_tests":
-        return run_tests(input_data["test_path"], repo_root)
+        test_path = input_data.get("test_path") or input_data.get("path") or input_data.get("tests")
+        print(f" test_path={test_path}")
+        if not test_path:
+            return "Error: Missing 'test_path' parameter"
+        return run_tests(test_path, repo_root)
 
     elif name == "run_command":
-        result = run_command(input_data["command"], cwd=repo_root)
+        command = input_data.get("command") or input_data.get("cmd")
+        print(f" command={command}")
+        if not command:
+            return "Error: Missing 'command' parameter"
+        result = run_command(command, cwd=repo_root)
         return str(result)
 
     elif name == "submit_patch":
