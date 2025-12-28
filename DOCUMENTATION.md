@@ -396,94 +396,214 @@ result = runner.run_single(task, include_hints=True)
 
 ### Overview
 
-The metrics module (`eval/harness/metrics.py`) provides detailed analysis of agent behavior.
+The metrics module (`eval/harness/metrics.py`) provides comprehensive analysis of agent behavior at multiple levels.
 
-### Tool Usage Metrics
+### Metric Categories
 
-```python
-@dataclass
-class ToolUsageMetrics:
-    total_calls: int
-    calls_by_tool: dict          # {"read_file": 3, "str_replace": 1, ...}
-    tool_sequence: list          # ["read_file", "search_code", ...]
-    
-    read_relevant_files: bool    # Did it read the hint files?
-    used_str_replace: bool       # Used preferred edit tool?
-    used_write_file: bool        # Used full file rewrite?
-    ran_tests: bool              # Ran any tests?
-    submitted: bool              # Called submit_patch?
-    
-    tool_errors: list            # Error messages from failed tool calls
-```
+| Category | Description |
+|----------|-------------|
+| **Token Metrics** | Usage, cost, efficiency |
+| **Reasoning Metrics** | Quality of agent's thinking |
+| **Phase Metrics** | Execution phases (explore, implement, verify) |
+| **Exploration Metrics** | How the agent navigated the codebase |
+| **Trajectory Metrics** | Path taken vs optimal path |
+| **Convergence Metrics** | Progress toward solution |
+| **Error Recovery Metrics** | How errors were handled |
+| **Tool Usage Metrics** | Tool call patterns |
+| **Patch Quality Metrics** | Quality of the output |
+| **Failure Analysis** | Classification of failure modes |
 
-### Patch Quality Metrics
+### Token Metrics
 
 ```python
 @dataclass
-class PatchQualityMetrics:
-    files_changed: list
-    gold_files_touched: list
-    correct_files_touched: bool
-    extra_files_touched: list
-    missing_files: list
-    
-    lines_added: int
-    lines_removed: int
-    
-    similarity_score: float      # 0-1 similarity to gold patch
-    patch_too_large: bool        # Rewrote whole file?
+class TokenMetrics:
+    total_input_tokens: int
+    total_output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+    tokens_per_tool_call: float
 ```
 
-### Failure Analysis
+### Reasoning Metrics
+
+Evaluates the quality of the agent's reasoning:
 
 ```python
 @dataclass
-class FailureAnalysis:
-    hit_max_steps: bool
-    agent_submitted: bool
-    
-    no_changes_made: bool
-    wrong_files_modified: bool
-    patch_too_large: bool
-    tool_errors_occurred: bool
-    model_got_stuck: bool
-    
-    failure_reasons: list        # Human-readable explanations
+class ReasoningMetrics:
+    reasoning_quality_score: float     # 0-1 overall score
+    has_explicit_reasoning: bool       # "I think the bug is..."
+    mentions_issue_keywords: bool      # References problem terms
+    mentions_relevant_files: bool      # Talks about correct files
+    hypothesizes_before_acting: bool   # Forms hypothesis first
+    explains_changes: bool             # "Changing X because..."
+    verifies_after_change: bool        # "Let me test..."
+    issue_keyword_matches: list        # Which keywords found
 ```
 
-### Debug Report
+### Phase Metrics
+
+Categorizes each tool call into execution phases:
+
+```python
+class Phase(Enum):
+    EXPLORATION = "exploration"      # Reading, listing, searching
+    IMPLEMENTATION = "implementation"  # Writing, editing
+    VERIFICATION = "verification"    # Testing, checking
+    SUBMISSION = "submission"        # Final submission
+
+@dataclass
+class PhaseMetrics:
+    exploration_steps: int
+    implementation_steps: int
+    verification_steps: int
+    exploration_pct: float
+    phase_transitions: int
+    followed_read_before_write: bool   # Good pattern?
+    followed_test_after_change: bool   # Good pattern?
+```
+
+### Exploration Metrics
+
+Analyzes how efficiently the agent explored the codebase:
+
+```python
+@dataclass
+class ExplorationMetrics:
+    exploration_strategy: str          # "targeted", "breadth_first", "random"
+    files_explored: int
+    directories_explored: int
+    relevant_file_discovery_step: int  # When found the bug location
+    exploration_efficiency: float      # relevant / total explorations
+    wasted_explorations: int           # Irrelevant files read
+```
+
+### Trajectory Metrics
+
+Compares the agent's path to an optimal trajectory:
+
+```python
+@dataclass
+class TrajectoryMetrics:
+    agent_trajectory: list             # ["read file.py", "search X", ...]
+    trajectory_length: int
+    optimal_trajectory: list           # What expert would do
+    optimal_length: int
+    trajectory_efficiency: float       # optimal / actual
+    unnecessary_steps: list            # Steps not needed
+```
+
+### Convergence Metrics
+
+Tracks progress toward the solution over time:
+
+```python
+@dataclass
+class ConvergenceMetrics:
+    progress_curve: list               # Similarity at each step
+    final_similarity: float
+    max_progress: float
+    converged: bool                    # Reached stable solution
+    monotonic_progress: bool           # Always improving?
+    had_regression: bool               # Got worse at any point?
+    progress_volatility: float         # Variance in progress
+```
+
+### Error Recovery Metrics
+
+Analyzes how the agent handled errors:
+
+```python
+@dataclass
+class ErrorRecoveryMetrics:
+    total_errors: int
+    recovered_errors: int
+    recovery_rate: float
+    stuck_episodes: list               # Periods of no progress
+    max_stuck_duration: int
+    repeated_actions: list             # Same action multiple times
+```
+
+### Failure Mode Classification
+
+Categorizes why tasks failed:
+
+```python
+class FailureMode(Enum):
+    # Exploration failures
+    MISSED_RELEVANT_FILE = "missed_relevant_file"
+    EXCESSIVE_EXPLORATION = "excessive_exploration"
+    
+    # Understanding failures
+    MISUNDERSTOOD_ISSUE = "misunderstood_issue"
+    WRONG_ROOT_CAUSE = "wrong_root_cause"
+    
+    # Implementation failures
+    WRONG_FIX_LOCATION = "wrong_fix_location"
+    INCOMPLETE_FIX = "incomplete_fix"
+    OVERWROTE_FILE = "overwrote_file"
+    
+    # Process failures
+    GAVE_UP_EARLY = "gave_up_early"
+    STUCK_IN_LOOP = "stuck_in_loop"
+    EXCEEDED_BUDGET = "exceeded_budget"
+    NO_SUBMISSION = "no_submission"
+```
+
+### Sample Debug Report
 
 ```
-=== Debug Report: scikit-learn__scikit-learn-32932 ===
+======================================================================
+DEBUG REPORT: scikit-learn__scikit-learn-32932
+======================================================================
 
-## Result
-  Resolved: False
-  Tests: 0 passed, 0 failed
+## RESULT
+  Resolved: True
+  Tests: 1 passed, 0 failed
 
-## Tool Usage
-  Total calls: 12
-  Calls by tool: {'read_file': 4, 'search_code': 4, 'str_replace_in_file': 1, ...}
-  Sequence: list_directory -> read_file -> search_code -> ...
-  Read relevant files: True
-  Used str_replace: True
-  Submitted: True
-  Tool errors: 0
+## REASONING QUALITY
+  Quality score: 70.0%
+  Has explicit reasoning: True
+  Mentions issue keywords: True
+  Hypothesizes before acting: True
+  Explains changes: True
+  Keywords found: ['penalty', 'warning']
 
-## Patch Quality
+## EXECUTION PHASES
+  Exploration: 2 steps (40%)
+  Implementation: 1 steps (20%)
+  Verification: 1 steps (20%)
+  Read before write: True
+  Test after change: True
+
+## EXPLORATION
+  Strategy: targeted
+  Files explored: 1
+  Relevant file found at step: 2
+  Exploration efficiency: 100.0%
+
+## TRAJECTORY
+  Agent trajectory length: 5
+  Optimal length: 4
+  Efficiency: 80.0%
+  Path: search → read → edit → test → submit
+
+## CONVERGENCE
+  Final similarity: 100.0%
+  Converged: True
+  Monotonic progress: True
+  Progress curve (last 5): 0% 0% 100% 100% 100%
+
+## PATCH QUALITY
   Files changed: ['sklearn/linear_model/_logistic.py']
   Correct files touched: True
-  Lines: +1 -1
-  Similarity to gold: 24.0%
+  Similarity to gold: 100.0%
 
-## Agent's Patch
-  diff --git a/sklearn/linear_model/_logistic.py ...
-  -        if penalty is None:
-  +        if self.penalty is None:
-
-## Failure Analysis
-  Hit max steps: False
+## FAILURE ANALYSIS
   Agent submitted: True
   No obvious issues found
+======================================================================
 ```
 
 ---
