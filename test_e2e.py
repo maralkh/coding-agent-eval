@@ -14,7 +14,9 @@ Usage:
 """
 
 import argparse
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -136,6 +138,15 @@ def test_agent(task, repo_path, max_steps: int = 10, provider: str = None, model
         if result.error:
             print(f"     Error: {result.error}")
         
+        # Show the actual patch
+        if result.patch:
+            print(f"\n   Agent's patch:")
+            print("-" * 60)
+            print(result.patch[:2000])
+            if len(result.patch) > 2000:
+                print(f"... ({len(result.patch) - 2000} more chars)")
+            print("-" * 60)
+        
         return result
     except Exception as e:
         print(f"   ✗ Error running agent: {e}")
@@ -186,10 +197,12 @@ def show_debug_metrics(task, agent_result, eval_result, max_steps):
     try:
         from eval.harness.metrics import compute_debug_metrics, format_debug_report
         
+        agent_patch = agent_result.patch if agent_result else ""
+        
         metrics = compute_debug_metrics(
             task_id=task.id,
             messages=agent_result.messages if agent_result else [],
-            agent_patch=agent_result.patch if agent_result else "",
+            agent_patch=agent_patch,
             gold_patch=task.gold_patch,
             relevant_files=task.relevant_files,
             resolved=eval_result.resolved if eval_result else False,
@@ -199,7 +212,7 @@ def show_debug_metrics(task, agent_result, eval_result, max_steps):
             tests_failed=(eval_result.fail_to_pass_total - eval_result.fail_to_pass_passed) if eval_result else 0,
         )
         
-        report = format_debug_report(metrics)
+        report = format_debug_report(metrics, agent_patch)
         print(report)
         
         return metrics
@@ -208,6 +221,189 @@ def show_debug_metrics(task, agent_result, eval_result, max_steps):
         import traceback
         traceback.print_exc()
         return None
+
+
+def save_run_results(
+    task,
+    agent_result,
+    eval_result,
+    metrics,
+    provider: str,
+    model: str,
+    max_steps: int,
+    output_dir: str = "results",
+):
+    """Save run results to a JSON file."""
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Build result record
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "task": {
+            "id": task.id,
+            "repo": task.repo,
+            "issue_title": task.issue_title,
+            "difficulty": task.difficulty,
+            "relevant_files": task.relevant_files,
+            "fail_to_pass": task.fail_to_pass,
+        },
+        "config": {
+            "provider": provider,
+            "model": model,
+            "max_steps": max_steps,
+        },
+        "agent": {
+            "success": agent_result.success if agent_result else False,
+            "steps": agent_result.steps if agent_result else 0,
+            "patch": agent_result.patch if agent_result else "",
+            "explanation": agent_result.explanation if agent_result else "",
+            "error": agent_result.error if agent_result else None,
+        },
+        "evaluation": {
+            "resolved": eval_result.resolved if eval_result else False,
+            "no_regression": eval_result.no_regression if eval_result else True,
+            "diff_size": eval_result.diff_size if eval_result else 0,
+            "files_changed": eval_result.files_changed if eval_result else [],
+            "fail_to_pass_passed": eval_result.fail_to_pass_passed if eval_result else 0,
+            "fail_to_pass_total": eval_result.fail_to_pass_total if eval_result else 0,
+        },
+        "metrics": {},
+    }
+    
+    # Add debug metrics if available
+    if metrics:
+        result["metrics"] = {
+            "tool_usage": {
+                "total_calls": metrics.tool_usage.total_calls,
+                "calls_by_tool": metrics.tool_usage.calls_by_tool,
+                "tool_sequence": metrics.tool_usage.tool_sequence,
+                "read_relevant_files": metrics.tool_usage.read_relevant_files,
+                "used_str_replace": metrics.tool_usage.used_str_replace,
+                "used_write_file": metrics.tool_usage.used_write_file,
+                "ran_tests": metrics.tool_usage.ran_tests,
+                "submitted": metrics.tool_usage.submitted,
+                "tool_errors": metrics.tool_usage.tool_errors,
+            },
+            "patch_quality": {
+                "files_changed": metrics.patch_quality.files_changed,
+                "gold_files_touched": metrics.patch_quality.gold_files_touched,
+                "correct_files_touched": metrics.patch_quality.correct_files_touched,
+                "extra_files_touched": metrics.patch_quality.extra_files_touched,
+                "missing_files": metrics.patch_quality.missing_files,
+                "lines_added": metrics.patch_quality.lines_added,
+                "lines_removed": metrics.patch_quality.lines_removed,
+                "similarity_score": metrics.patch_quality.similarity_score,
+                "patch_too_large": metrics.patch_quality.patch_too_large,
+            },
+            "failure_analysis": {
+                "hit_max_steps": metrics.failure_analysis.hit_max_steps,
+                "agent_submitted": metrics.failure_analysis.agent_submitted,
+                "no_changes_made": metrics.failure_analysis.no_changes_made,
+                "wrong_files_modified": metrics.failure_analysis.wrong_files_modified,
+                "patch_too_large": metrics.failure_analysis.patch_too_large,
+                "tool_errors_occurred": metrics.failure_analysis.tool_errors_occurred,
+                "model_got_stuck": metrics.failure_analysis.model_got_stuck,
+                "failure_reasons": metrics.failure_analysis.failure_reasons,
+            },
+        }
+    
+    # Save to file
+    model_safe = (model or "default").replace("/", "-")
+    filename = f"{task.id}_{model_safe}_{timestamp}.json"
+    filepath = output_path / filename
+    
+    with open(filepath, "w") as f:
+        json.dump(result, f, indent=2, default=str)
+    
+    print(f"\n8. Results saved to: {filepath}")
+    
+    # Also append to a summary JSONL file
+    summary_file = output_path / "runs.jsonl"
+    summary_record = {
+        "timestamp": result["timestamp"],
+        "task_id": task.id,
+        "provider": provider,
+        "model": model,
+        "resolved": result["evaluation"]["resolved"],
+        "steps": result["agent"]["steps"],
+        "similarity": metrics.patch_quality.similarity_score if metrics else 0,
+        "result_file": str(filepath),
+    }
+    
+    with open(summary_file, "a") as f:
+        f.write(json.dumps(summary_record) + "\n")
+    
+    return filepath
+
+
+def show_runs_summary(output_dir: str = "results"):
+    """Show a summary of all previous runs."""
+    output_path = Path(output_dir)
+    summary_file = output_path / "runs.jsonl"
+    
+    if not summary_file.exists():
+        print(f"No runs found in {output_dir}/")
+        return
+    
+    runs = []
+    with open(summary_file) as f:
+        for line in f:
+            if line.strip():
+                runs.append(json.loads(line))
+    
+    if not runs:
+        print("No runs found.")
+        return
+    
+    print(f"\n{'='*80}")
+    print(f"RUNS SUMMARY ({len(runs)} total)")
+    print(f"{'='*80}")
+    print(f"{'Timestamp':<20} {'Task ID':<35} {'Model':<20} {'Resolved':<10} {'Steps':<6} {'Similarity':<10}")
+    print("-"*80)
+    
+    # Group by task
+    by_task = {}
+    for run in runs:
+        task_id = run["task_id"]
+        if task_id not in by_task:
+            by_task[task_id] = []
+        by_task[task_id].append(run)
+    
+    for task_id, task_runs in by_task.items():
+        for run in task_runs:
+            ts = run["timestamp"][:19].replace("T", " ")
+            model = (run.get("model") or "default")[:18]
+            resolved = "✓" if run["resolved"] else "✗"
+            steps = run.get("steps", "?")
+            similarity = f"{run.get('similarity', 0):.1%}"
+            print(f"{ts:<20} {task_id[:33]:<35} {model:<20} {resolved:<10} {steps:<6} {similarity:<10}")
+    
+    print("-"*80)
+    
+    # Summary stats
+    resolved_count = sum(1 for r in runs if r["resolved"])
+    print(f"\nResolved: {resolved_count}/{len(runs)} ({resolved_count/len(runs):.1%})")
+    
+    # By model
+    by_model = {}
+    for run in runs:
+        model = run.get("model") or "default"
+        if model not in by_model:
+            by_model[model] = {"total": 0, "resolved": 0}
+        by_model[model]["total"] += 1
+        if run["resolved"]:
+            by_model[model]["resolved"] += 1
+    
+    if len(by_model) > 1:
+        print("\nBy model:")
+        for model, stats in sorted(by_model.items()):
+            rate = stats["resolved"] / stats["total"]
+            print(f"  {model}: {stats['resolved']}/{stats['total']} ({rate:.1%})")
+    
+    print()
 
 
 def test_results_store():
@@ -354,8 +550,25 @@ def main():
         action="store_true",
         help="Verbose output",
     )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="results",
+        help="Output directory for results (default: results)",
+    )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Show summary of all previous runs and exit",
+    )
     
     args = parser.parse_args()
+    
+    # Show summary if requested
+    if args.summary:
+        show_runs_summary(args.output)
+        sys.exit(0)
     
     print("="*60)
     print("END-TO-END TEST")
@@ -408,8 +621,22 @@ def main():
         all_passed = False
     
     # Show debug metrics (always, even if evaluation failed)
+    metrics = None
     if agent_result:
-        show_debug_metrics(task, agent_result, eval_result, args.max_steps)
+        metrics = show_debug_metrics(task, agent_result, eval_result, args.max_steps)
+    
+    # Save results to file
+    if agent_result:
+        save_run_results(
+            task=task,
+            agent_result=agent_result,
+            eval_result=eval_result,
+            metrics=metrics,
+            provider=args.provider or "auto",
+            model=args.model or "default",
+            max_steps=args.max_steps,
+            output_dir=args.output,
+        )
     
     # Summary
     print("\n" + "="*60)
