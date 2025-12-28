@@ -52,6 +52,12 @@ def run_command(cmd: str, cwd: str | None = None, timeout: int = 60) -> CommandR
 
 def read_file(path: str, repo_root: str) -> str:
     """Read a file from the repository."""
+    # Normalize path - handle absolute paths by making them relative
+    path = path.lstrip("/")
+    repo_root_stripped = repo_root.lstrip("/")
+    if path.startswith(repo_root_stripped):
+        path = path[len(repo_root_stripped):].lstrip("/")
+    
     full_path = Path(repo_root) / path
     if not full_path.exists():
         return f"Error: File not found: {path}"
@@ -65,11 +71,25 @@ def read_file(path: str, repo_root: str) -> str:
 
 def write_file(path: str, content: str, repo_root: str) -> str:
     """Write content to a file in the repository."""
+    original_path = path
+    
+    # Normalize path - handle absolute paths by making them relative
+    path = path.lstrip("/")
+    repo_root_stripped = repo_root.lstrip("/")
+    if path.startswith(repo_root_stripped):
+        path = path[len(repo_root_stripped):].lstrip("/")
+    
     full_path = Path(repo_root) / path
+    
+    # Debug output
+    print(f"      [write_file debug] original={original_path}")
+    print(f"      [write_file debug] normalized={path}")
+    print(f"      [write_file debug] full_path={full_path}")
+    
     try:
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(content)
-        return f"Successfully wrote to {path}"
+        return f"Successfully wrote to {path} ({len(content)} chars)"
     except Exception as e:
         return f"Error writing file: {e}"
 
@@ -231,6 +251,15 @@ REPO_TOOLS = [
 
 def run_repo_tool(name: str, input_data: dict, repo_root: str) -> str:
     """Execute a repository tool and return the result."""
+    # Debug: print tool calls
+    print(f"    [Tool: {name}]", end="")
+    if name == "read_file":
+        print(f" path={input_data.get('path', 'N/A')}")
+    elif name == "write_file":
+        print(f" path={input_data.get('path', 'N/A')} ({len(input_data.get('content', ''))} chars)")
+    else:
+        print()
+    
     if name == "read_file":
         return read_file(input_data["path"], repo_root)
 

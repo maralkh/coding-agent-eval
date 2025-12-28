@@ -13,6 +13,9 @@ class RepoManager:
             cache_dir = Path.home() / ".cache" / "coding-agent-eval" / "repos"
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Directory for local test repos
+        self.local_repos_dir = Path(local_repos_dir) if local_repos_dir else None
 
     def _run_git(
         self, args: list[str], cwd: Path | None = None, check: bool = True
@@ -28,7 +31,20 @@ class RepoManager:
 
     def get_repo_dir(self, repo: str) -> Path:
         """Get the cache directory for a repo."""
-        # repo is like "scikit-learn/scikit-learn"
+        # Handle local repos (format: "local/repo_name")
+        if repo.startswith("local/"):
+            repo_name = repo.split("/", 1)[1]
+            if self.local_repos_dir:
+                return self.local_repos_dir / repo_name
+            # Default: look in current directory or parent
+            for base in [Path.cwd(), Path.cwd().parent, Path(__file__).parent.parent.parent]:
+                candidate = base / repo_name
+                if candidate.exists():
+                    return candidate
+            # Fallback to cache
+            return self.cache_dir / repo_name
+        
+        # Remote repo: "owner/name" format
         safe_name = repo.replace("/", "__")
         return self.cache_dir / safe_name
 
@@ -37,13 +53,21 @@ class RepoManager:
         Clone a repository (uses cache if exists).
         
         Args:
-            repo: Repository in "owner/name" format
+            repo: Repository in "owner/name" format, or "local/name" for local repos
             force_fresh: If True, delete and re-clone
             
         Returns:
             Path to the cloned repository
         """
         repo_dir = self.get_repo_dir(repo)
+        
+        # Handle local repos - just return the path if it exists
+        if repo.startswith("local/"):
+            if repo_dir.exists():
+                print(f"Using local repo: {repo_dir}")
+                return repo_dir
+            else:
+                raise FileNotFoundError(f"Local repo not found: {repo_dir}")
         
         if force_fresh and repo_dir.exists():
             shutil.rmtree(repo_dir)

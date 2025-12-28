@@ -27,7 +27,9 @@ class EvaluationRunner:
         self,
         output_dir: Path | str = "results",
         cache_dir: Path | str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        local_repos_dir: Path | str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
         max_steps: int = 30,
         timeout: int = 600,
     ):
@@ -37,16 +39,19 @@ class EvaluationRunner:
         Args:
             output_dir: Directory to save results
             cache_dir: Directory to cache cloned repos
-            model: Model to use for the agent
+            local_repos_dir: Directory containing local test repos
+            model: Model to use for the agent (uses provider default if not specified)
+            provider: LLM provider (anthropic, groq, openai, ollama)
             max_steps: Maximum agent steps per task
             timeout: Timeout per task in seconds
         """
         self.output_dir = Path(output_dir)
-        self.repo_manager = RepoManager(cache_dir)
+        self.repo_manager = RepoManager(cache_dir, local_repos_dir)
         self.evaluator = Evaluator(timeout=timeout)
         self.results_store = ResultsStore(self.output_dir)
         
         self.model = model
+        self.provider = provider
         self.max_steps = max_steps
         self.timeout = timeout
 
@@ -76,6 +81,7 @@ class EvaluationRunner:
         print(f"Tasks: {len(tasks)}")
         print(f"Already completed: {len(completed_ids)}")
         print(f"Model: {self.model}")
+        print(f"Provider: {self.provider or 'auto'}")
         print(f"Max steps: {self.max_steps}")
         print(f"Timeout: {self.timeout}s")
         print()
@@ -141,7 +147,11 @@ class EvaluationRunner:
         # 1. Setup repository
         repo_path = self.repo_manager.clone(task.repo)
         self.repo_manager.reset(repo_path)  # Clean state
-        self.repo_manager.checkout(repo_path, task.base_commit)
+        
+        # Only checkout specific commit for remote repos
+        is_local = task.repo.startswith("local/")
+        if not is_local:
+            self.repo_manager.checkout(repo_path, task.base_commit)
         
         # 2. Run agent
         start_time = time.time()
@@ -149,7 +159,7 @@ class EvaluationRunner:
         if RepoAgent is None:
             raise ImportError("Could not import RepoAgent from agent package")
         
-        agent = RepoAgent(model=self.model, max_steps=self.max_steps)
+        agent = RepoAgent(model=self.model, provider=self.provider, max_steps=self.max_steps)
         
         try:
             agent_result = agent.solve(

@@ -79,9 +79,15 @@ class RepoAgent:
 
             # Process response content
             assistant_content = []
+            has_text = False
             for block in response.content:
                 if block.type == "text":
                     assistant_content.append({"type": "text", "text": block.text})
+                    has_text = True
+                    # Debug: show text responses
+                    if block.text.strip():
+                        preview = block.text[:100].replace('\n', ' ')
+                        print(f"    [Agent says: {preview}...]")
                 elif block.type == "tool_use":
                     assistant_content.append({
                         "type": "tool_use",
@@ -120,10 +126,18 @@ class RepoAgent:
             if tool_results:
                 messages.append({"role": "user", "content": tool_results})
             else:
-                # No tool calls - might be stuck
-                break
+                # No tool calls - nudge the model to use tools
+                if steps < self.max_steps - 1:
+                    # Add a nudge message
+                    messages.append({
+                        "role": "user", 
+                        "content": "Please use the tools to complete the task. Call read_file to examine the code, write_file to fix it, then submit_patch when done."
+                    })
+                else:
+                    # Last step and no tools - exit
+                    break
 
-            if response.stop_reason == "end_turn" and not tool_results:
+            if response.stop_reason == "end_turn" and not tool_results and steps >= self.max_steps - 1:
                 break
 
         # Reached max steps without submitting
