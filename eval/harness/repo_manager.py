@@ -8,7 +8,7 @@ from pathlib import Path
 class RepoManager:
     """Manages repository cloning and state."""
 
-    def __init__(self, cache_dir: Path | str | None = None):
+    def __init__(self, cache_dir: Path | str | None = None, local_repos_dir: Path | str | None = None):
         if cache_dir is None:
             cache_dir = Path.home() / ".cache" / "coding-agent-eval" / "repos"
         self.cache_dir = Path(cache_dir)

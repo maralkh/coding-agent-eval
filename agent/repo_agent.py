@@ -30,10 +30,11 @@ class RepoAgent:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str | None = None,
+        provider: str | None = None,
         max_steps: int = 30,
     ):
-        self.llm = LLMClient(model=model)
+        self.llm = LLMClient(model=model, provider=provider)
         self.max_steps = max_steps
 
     def solve(
