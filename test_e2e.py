@@ -622,6 +622,11 @@ def main():
         action="store_true",
         help="Show summary of all previous runs and exit",
     )
+    parser.add_argument(
+        "--json-output",
+        action="store_true",
+        help="Output results as JSON (for benchmark script)",
+    )
     
     args = parser.parse_args()
     
@@ -697,6 +702,24 @@ def main():
             max_steps=args.max_steps,
             output_dir=args.output,
         )
+    
+    # Output JSON for benchmark script
+    if args.json_output:
+        json_result = {
+            "task_id": task.id,
+            "resolved": eval_result.resolved if eval_result else False,
+            "submitted": metrics.tool_usage.submitted if metrics else False,
+            "steps": agent_result.steps if agent_result else 0,
+            "similarity_score": metrics.patch_quality.similarity_score if metrics else 0.0,
+            "reasoning_score": metrics.reasoning_metrics.reasoning_quality_score if metrics else 0.0,
+            "exploration_efficiency": metrics.exploration_metrics.exploration_efficiency if metrics else 0.0,
+            "trajectory_efficiency": metrics.trajectory_metrics.trajectory_efficiency if metrics else 0.0,
+            "primary_failure_mode": metrics.failure_analysis.primary_failure_mode if metrics else "",
+            "failure_reasons": metrics.failure_analysis.failure_reasons if metrics else [],
+        }
+        print("===JSON_OUTPUT===")
+        print(json.dumps(json_result))
+        print("===END_JSON===")
     
     # Summary
     print("\n" + "="*60)

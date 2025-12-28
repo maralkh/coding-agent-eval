@@ -731,6 +731,67 @@ By model:
   o4-mini: 0/1 (0.0%)
 ```
 
+### Benchmarking Multiple Models
+
+The `benchmark.py` script provides comprehensive model comparison:
+
+```bash
+# Compare multiple models on all tasks
+python benchmark.py --tasks eval/tasks/ --models gpt-4o o4-mini claude-sonnet-4-20250514
+
+# Specify providers explicitly
+python benchmark.py --tasks eval/tasks/ \
+    --models openai:gpt-4o openai:o4-mini anthropic:claude-sonnet-4-20250514
+
+# Quick test with limited tasks
+python benchmark.py --tasks eval/tasks/ --models gpt-4o --max-tasks 3
+
+# View existing benchmark results
+python benchmark.py --results-only -o results/benchmark/
+```
+
+#### Benchmark Output
+
+```
+================================================================================
+BENCHMARK SUMMARY
+================================================================================
+
+Model                               Provider     Resolved     Similarity   Steps
+--------------------------------------------------------------------------------
+gpt-4o                              openai       8/10 (80%)   85.2%        12.3
+claude-sonnet-4-20250514            anthropic    7/10 (70%)   78.5%        15.1
+o4-mini                             openai       5/10 (50%)   62.3%        18.7
+--------------------------------------------------------------------------------
+
+Best resolve rate: gpt-4o
+Best similarity: gpt-4o
+```
+
+#### Benchmark Report (REPORT.md)
+
+The benchmark generates a markdown report with:
+- Summary table comparing all models
+- Failure mode breakdown per model
+- Per-task results matrix
+
+```markdown
+# Benchmark Report
+
+## Summary
+
+| Model | Provider | Resolved | Submit | Avg Steps | Avg Similarity | Avg Reasoning |
+|-------|----------|----------|--------|-----------|----------------|---------------|
+| gpt-4o | openai | 80.0% (8/10) | 100.0% | 12.3 | 85.2% | 72.0% |
+| claude-sonnet-4-20250514 | anthropic | 70.0% (7/10) | 100.0% | 15.1 | 78.5% | 68.5% |
+
+## Failure Mode Breakdown
+
+### o4-mini
+- missed_relevant_file: 3 (30.0%)
+- excessive_exploration: 2 (20.0%)
+```
+
 ---
 
 ## Known Issues & Solutions
