@@ -1,12 +1,34 @@
-"""Evaluation framework for coding agents."""
+"""Minimal coding agent package."""
 
-from .task import Task, estimate_difficulty
-from .collector import TaskCollector
-from .github_client import GitHubClient
+from .agent import CodingAgent, AgentResult
+from .repo_agent import RepoAgent, RepoAgentResult
+from .llm import LLMClient
+from .tools import execute_python, ExecutionResult
+from .repo_tools import (
+    read_file,
+    write_file,
+    list_directory,
+    search_code,
+    run_tests,
+    run_command,
+)
 
 __all__ = [
-    "Task",
-    "TaskCollector",
-    "GitHubClient",
-    "estimate_difficulty",
+    # Original agent
+    "CodingAgent",
+    "AgentResult",
+    # Repo agent
+    "RepoAgent",
+    "RepoAgentResult",
+    # LLM
+    "LLMClient",
+    # Tools
+    "execute_python",
+    "ExecutionResult",
+    "read_file",
+    "write_file",
+    "list_directory",
+    "search_code",
+    "run_tests",
+    "run_command",
 ]
