@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-32918",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "a4db9a9dc45bbd39e397ea4ebf9c5dcc6a658500",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 32918,
+  "pr_title": "DOC Fix response values shape",
+  "gold_patch": "diff --git a/sklearn/utils/_response.py b/sklearn/utils/_response.py\nindex 16c0ff0f4cf68..1344a532c777f 100644\n--- a/sklearn/utils/_response.py\n+++ b/sklearn/utils/_response.py\n@@ -125,7 +125,9 @@ def _get_response_values(\n     The response values are predictions such that it follows the following shape:\n \n     - for binary classification, it is a 1d array of shape `(n_samples,)`;\n-    - for multiclass classification, it is a 2d array of shape `(n_samples, n_classes)`;\n+    - for multiclass classification\n+        - with response_method=\"predict\", it is a 1d array of shape `(n_samples,)`;\n+        - otherwise, it is a 2d array of shape `(n_samples, n_classes)`;\n     - for multilabel classification, it is a 2d array of shape `(n_samples, n_outputs)`;\n     - for outlier detection, it is a 1d array of shape `(n_samples,)`;\n     - for regression, it is a 1d array of shape `(n_samples,)`.\ndiff --git a/sklearn/utils/tests/test_response.py b/sklearn/utils/tests/test_response.py\nindex 273279357e11c..4e9a2c489e1c6 100644\n--- a/sklearn/utils/tests/test_response.py\n+++ b/sklearn/utils/tests/test_response.py\n@@ -394,3 +394,55 @@ def test_response_values_type_of_target_on_classes_no_warning():\n         warnings.simplefilter(\"error\", UserWarning)\n \n         _get_response_values(clf, X, response_method=\"predict_proba\")\n+\n+\n+@pytest.mark.parametrize(\n+    \"estimator, response_method, target_type, expected_shape\",\n+    [\n+        (LogisticRegression(), \"predict\", \"binary\", (10,)),\n+        (LogisticRegression(), \"predict_proba\", \"binary\", (10,)),\n+        (LogisticRegression(), \"decision_function\", \"binary\", (10,)),\n+        (LogisticRegression(), \"predict\", \"multiclass\", (10,)),\n+        (LogisticRegression(), \"predict_proba\", \"multiclass\", (10, 4)),\n+        (LogisticRegression(), \"decision_function\", \"multiclass\", (10, 4)),\n+        (ClassifierChain(LogisticRegression()), \"predict\", \"multilabel\", (10, 2)),\n+        (ClassifierChain(LogisticRegression()), \"predict_proba\", \"multilabel\", (10, 2)),\n+        (\n+            ClassifierChain(LogisticRegression()),\n+            \"decision_function\",\n+            \"multilabel\",\n+            (10, 2),\n+        ),\n+        (IsolationForest(), \"predict\", \"binary\", (10,)),\n+        (IsolationForest(), \"predict\", \"multiclass\", (10,)),\n+        (DecisionTreeRegressor(), \"predict\", \"binary\", (10,)),\n+        (DecisionTreeRegressor(), \"predict\", \"multiclass\", (10,)),\n+    ],\n+)\n+def test_response_values_output_shape_(\n+    estimator, response_method, target_type, expected_shape\n+):\n+    \"\"\"\n+    Check that output shape corresponds to docstring description\n+\n+    - for binary classification, it is a 1d array of shape `(n_samples,)`;\n+    - for multiclass classification\n+        - with response_method=\"predict\", it is a 1d array of shape `(n_samples,)`;\n+        - otherwise, it is a 2d array of shape `(n_samples, n_classes)`;\n+    - for multilabel classification, it is a 2d array of shape `(n_samples, n_outputs)`;\n+    - for outlier detection, it is a 1d array of shape `(n_samples,)`;\n+    - for regression, it is a 1d array of shape `(n_samples,)`.\n+    \"\"\"\n+    X = np.random.RandomState(0).randn(10, 2)\n+    if target_type == \"binary\":\n+        y = np.array([0, 1] * 5)\n+    elif target_type == \"multiclass\":\n+        y = [0, 1, 2, 3, 0, 1, 2, 3, 3, 0]\n+    else:  # multilabel\n+        y = np.array([[0, 1], [1, 0]] * 5)\n+\n+    clf = estimator.fit(X, y)\n+\n+    y_pred, _ = _get_response_values(clf, X, response_method=response_method)\n+\n+    assert y_pred.shape == expected_shape\n",
+  "fail_to_pass": [
+    "test_response_values_output_shape_"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/_response.py",
+    "sklearn/utils/tests/test_response.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-12-17T15:00:58Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32918",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}
