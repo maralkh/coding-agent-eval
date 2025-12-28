@@ -209,7 +209,7 @@ class LLMClient:
                     {
                         "role": "tool",
                         "tool_call_id": tr["tool_use_id"],
-                        "content": tr["content"],
+                        "content": str(tr.get("content", "")),  # Ensure string
                     }
                     for tr in tool_results
                 ]
@@ -232,7 +232,8 @@ class LLMClient:
                         }
                     })
             
-            result = {"role": "assistant", "content": "\n".join(text_parts) if text_parts else None}
+            # OpenAI requires content to be a string, not null
+            result = {"role": "assistant", "content": "\n".join(text_parts) if text_parts else ""}
             if tool_calls:
                 result["tool_calls"] = tool_calls
             return result
@@ -243,9 +244,9 @@ class LLMClient:
         elif isinstance(content, list) and len(content) > 0:
             # Extract text from content blocks
             texts = [c.get("text", str(c)) for c in content if isinstance(c, dict)]
-            return {"role": role, "content": "\n".join(texts) if texts else str(content)}
+            return {"role": role, "content": "\n".join(texts) if texts else "(no content)"}
         
-        return {"role": role, "content": str(content)}
+        return {"role": role, "content": str(content) if content else "(no content)"}
 
     def _convert_tool_to_openai(self, tool: dict) -> dict:
         """Convert Anthropic tool format to OpenAI format."""

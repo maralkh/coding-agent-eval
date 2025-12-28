@@ -179,6 +179,37 @@ def test_evaluation(task, repo_path, agent_result):
         return None
 
 
+def show_debug_metrics(task, agent_result, eval_result, max_steps):
+    """Show detailed debug metrics for the run."""
+    print(f"\n7. Debug Metrics...")
+    
+    try:
+        from eval.harness.metrics import compute_debug_metrics, format_debug_report
+        
+        metrics = compute_debug_metrics(
+            task_id=task.id,
+            messages=agent_result.messages if agent_result else [],
+            agent_patch=agent_result.patch if agent_result else "",
+            gold_patch=task.gold_patch,
+            relevant_files=task.relevant_files,
+            resolved=eval_result.resolved if eval_result else False,
+            max_steps=max_steps,
+            actual_steps=agent_result.steps if agent_result else 0,
+            tests_passed=eval_result.fail_to_pass_passed if eval_result else 0,
+            tests_failed=(eval_result.fail_to_pass_total - eval_result.fail_to_pass_passed) if eval_result else 0,
+        )
+        
+        report = format_debug_report(metrics)
+        print(report)
+        
+        return metrics
+    except Exception as e:
+        print(f"   ✗ Error computing metrics: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def test_results_store():
     """Test saving and loading results."""
     print(f"\n6. Testing results storage...")
@@ -375,6 +406,10 @@ def main():
     eval_result = test_evaluation(task, repo_path, agent_result)
     if not eval_result:
         all_passed = False
+    
+    # Show debug metrics (always, even if evaluation failed)
+    if agent_result:
+        show_debug_metrics(task, agent_result, eval_result, args.max_steps)
     
     # Summary
     print("\n" + "="*60)

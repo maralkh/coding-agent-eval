@@ -158,17 +158,41 @@ def list_directory(path: str, repo_root: str) -> str:
 
 def search_code(pattern: str, repo_root: str, file_pattern: str = "*.py") -> str:
     """Search for a pattern in the codebase using grep."""
-    cmd = f"grep -rn --include='{file_pattern}' '{pattern}' ."
-    result = run_command(cmd, cwd=repo_root, timeout=30)
-    if result.returncode == 0:
-        lines = result.stdout.strip().split("\n")
-        if len(lines) > 50:
-            return "\n".join(lines[:50]) + f"\n... and {len(lines) - 50} more matches"
-        return result.stdout
-    elif result.returncode == 1:
-        return "No matches found"
+    
+    # Check if file_pattern is a specific file path (contains /) or a glob pattern
+    if '/' in file_pattern and '*' not in file_pattern:
+        # It's a specific file path - search only that file
+        file_path = Path(repo_root) / file_pattern
+        if not file_path.exists():
+            return f"Error: File not found: {file_pattern}"
+        cmd = f"grep -n '{pattern}' '{file_pattern}'"
+        result = run_command(cmd, cwd=repo_root, timeout=30)
+        if result.returncode == 0:
+            # Prepend filename to results for consistency
+            lines = []
+            for line in result.stdout.strip().split("\n"):
+                if line:
+                    lines.append(f"{file_pattern}:{line}")
+            if len(lines) > 50:
+                return "\n".join(lines[:50]) + f"\n... and {len(lines) - 50} more matches"
+            return "\n".join(lines)
+        elif result.returncode == 1:
+            return "No matches found"
+        else:
+            return f"Search error: {result.stderr}"
     else:
-        return f"Search error: {result.stderr}"
+        # It's a glob pattern - use --include
+        cmd = f"grep -rn --include='{file_pattern}' '{pattern}' ."
+        result = run_command(cmd, cwd=repo_root, timeout=30)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split("\n")
+            if len(lines) > 50:
+                return "\n".join(lines[:50]) + f"\n... and {len(lines) - 50} more matches"
+            return result.stdout
+        elif result.returncode == 1:
+            return "No matches found"
+        else:
+            return f"Search error: {result.stderr}"
 
 
 def run_tests(test_path: str, repo_root: str, timeout: int = 120) -> str:
@@ -250,7 +274,7 @@ REPO_TOOLS = [
     },
     {
         "name": "search_code",
-        "description": "Search for a pattern in the codebase using grep. Returns matching lines with file paths.",
+        "description": "Search for a pattern in the codebase using grep. Returns matching lines with file paths and line numbers.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -260,7 +284,7 @@ REPO_TOOLS = [
                 },
                 "file_pattern": {
                     "type": "string",
-                    "description": "File glob pattern to search in (default: *.py)",
+                    "description": "Either a glob pattern (e.g., '*.py') or a specific file path (e.g., 'src/module.py'). Default: *.py",
                 },
             },
             "required": ["pattern"],
