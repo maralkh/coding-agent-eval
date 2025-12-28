@@ -356,6 +356,59 @@ class PatchQualityMetrics:
 
 
 @dataclass
+class SemanticCorrectnessMetrics:
+    """
+    Metrics for evaluating semantic/functional correctness of a patch.
+    
+    Unlike similarity_score which measures textual similarity, these metrics
+    evaluate whether the patch is likely to be a correct fix even if it
+    differs from the gold patch.
+    """
+    
+    # Test-based correctness (most reliable signal)
+    tests_pass: bool = False              # Do fail_to_pass tests now pass?
+    tests_no_regression: bool = True      # Do pass_to_pass tests still pass?
+    
+    # Location correctness
+    fixes_same_file: bool = False         # At least one overlapping file
+    fixes_same_function: bool = False     # Modifies the same function(s)
+    fixes_same_class: bool = False        # Modifies the same class(es)
+    fixes_same_code_region: bool = False  # Within N lines of gold fix
+    
+    # Change type analysis
+    change_type: str = ""                 # add_code, remove_code, modify_condition, etc.
+    gold_change_type: str = ""
+    change_type_match: bool = False       # Same category of change
+    
+    # Semantic patterns
+    modifies_same_variable: bool = False  # Same variable/attribute modified
+    modifies_same_call: bool = False      # Same function call changed
+    adds_same_check: bool = False         # Adds similar conditional check
+    
+    # Structural similarity
+    ast_node_overlap: float = 0.0         # Overlap in AST node types changed
+    control_flow_similar: bool = False    # Similar control flow change
+    
+    # Combined scores
+    semantic_similarity_score: float = 0.0  # Weighted combination of above
+    location_score: float = 0.0             # How close to correct location
+    
+    # Final assessment
+    likely_correct: bool = False          # Heuristic: probably a valid fix
+    correctness_confidence: float = 0.0   # 0-1 confidence score
+    
+    # Evidence
+    correctness_indicators: list = field(default_factory=list)  # Why we think it's correct
+    incorrectness_indicators: list = field(default_factory=list)  # Why we think it's wrong
+    
+    # Functions/classes involved
+    agent_functions_modified: list = field(default_factory=list)
+    gold_functions_modified: list = field(default_factory=list)
+    agent_classes_modified: list = field(default_factory=list)
+    gold_classes_modified: list = field(default_factory=list)
+
+
+@dataclass
 class FailureAnalysis:
     """Comprehensive analysis of why a task might have failed."""
     
@@ -396,6 +449,9 @@ class DebugMetrics:
     tool_usage: ToolUsageMetrics = field(default_factory=ToolUsageMetrics)
     patch_quality: PatchQualityMetrics = field(default_factory=PatchQualityMetrics)
     failure_analysis: FailureAnalysis = field(default_factory=FailureAnalysis)
+    
+    # Semantic correctness (NEW - evaluates functional correctness beyond similarity)
+    semantic_correctness: SemanticCorrectnessMetrics = field(default_factory=SemanticCorrectnessMetrics)
     
     # New detailed metrics
     token_metrics: TokenMetrics = field(default_factory=TokenMetrics)
@@ -1287,6 +1343,369 @@ def extract_change_lines(patch: str) -> str:
 
 
 # =============================================================================
+# SEMANTIC CORRECTNESS ANALYSIS
+# =============================================================================
+
+def extract_functions_from_patch(patch: str) -> list[str]:
+    """
+    Extract function/method names that are modified in a patch.
+    
+    Looks for:
+    - def function_name(
+    - async def function_name(
+    - Function definitions in context lines (@@)
+    """
+    functions = []
+    
+    # Pattern for function definitions in changed lines
+    func_def_pattern = r'(?:async\s+)?def\s+(\w+)\s*\('
+    
+    # Pattern for function names in hunk headers (@@)
+    hunk_pattern = r'@@.*@@\s*(?:async\s+)?def\s+(\w+)'
+    
+    for line in patch.split('\n'):
+        # Check changed lines
+        if line.startswith(('+', '-')) and not line.startswith(('+++', '---')):
+            for match in re.finditer(func_def_pattern, line):
+                func_name = match.group(1)
+                if func_name not in functions:
+                    functions.append(func_name)
+        
+        # Check hunk headers for context
+        if line.startswith('@@'):
+            match = re.search(hunk_pattern, line)
+            if match:
+                func_name = match.group(1)
+                if func_name not in functions:
+                    functions.append(func_name)
+    
+    return functions
+
+
+def extract_classes_from_patch(patch: str) -> list[str]:
+    """Extract class names that are modified in a patch."""
+    classes = []
+    
+    # Pattern for class definitions
+    class_pattern = r'class\s+(\w+)\s*[:\(]'
+    
+    for line in patch.split('\n'):
+        if line.startswith(('+', '-', '@@')):
+            for match in re.finditer(class_pattern, line):
+                class_name = match.group(1)
+                if class_name not in classes:
+                    classes.append(class_name)
+    
+    return classes
+
+
+def extract_variables_from_patch(patch: str) -> list[str]:
+    """Extract variable/attribute names that are assigned in the patch."""
+    variables = []
+    
+    # Patterns for assignments
+    patterns = [
+        r'(\w+)\s*=\s*[^=]',           # x = ...
+        r'self\.(\w+)\s*=',             # self.x = ...
+        r'(\w+)\s*[+\-*/%]=',           # x += ...
+        r'(\w+)\s*:\s*\w+\s*=',         # x: int = ...
+    ]
+    
+    for line in patch.split('\n'):
+        if line.startswith('+') and not line.startswith('+++'):
+            for pattern in patterns:
+                for match in re.finditer(pattern, line):
+                    var_name = match.group(1)
+                    if var_name not in variables and var_name not in ('self', 'cls'):
+                        variables.append(var_name)
+    
+    return variables
+
+
+def classify_change_type(patch: str) -> str:
+    """
+    Classify the type of change in a patch.
+    
+    Returns one of:
+    - add_code: Primarily adding new code
+    - remove_code: Primarily removing code
+    - modify_condition: Changing if/while/for conditions
+    - modify_return: Changing return statements
+    - modify_assignment: Changing assignments
+    - add_check: Adding null/type/bounds checks
+    - fix_call: Modifying function calls
+    - refactor: Restructuring without functional change
+    - mixed: Multiple types of changes
+    """
+    added_lines = []
+    removed_lines = []
+    
+    for line in patch.split('\n'):
+        if line.startswith('+') and not line.startswith('+++'):
+            added_lines.append(line[1:].strip())
+        elif line.startswith('-') and not line.startswith('---'):
+            removed_lines.append(line[1:].strip())
+    
+    n_added = len(added_lines)
+    n_removed = len(removed_lines)
+    
+    # Primarily adding
+    if n_added > 0 and n_removed == 0:
+        return "add_code"
+    
+    # Primarily removing
+    if n_removed > 0 and n_added == 0:
+        return "remove_code"
+    
+    # Check for specific patterns
+    added_text = '\n'.join(added_lines)
+    removed_text = '\n'.join(removed_lines)
+    
+    # Condition changes
+    condition_patterns = [r'\bif\s+', r'\bwhile\s+', r'\bfor\s+', r'\belif\s+', r'\band\b', r'\bor\b']
+    condition_changed = any(
+        re.search(p, added_text) or re.search(p, removed_text) 
+        for p in condition_patterns
+    )
+    if condition_changed and n_added <= 3 and n_removed <= 3:
+        return "modify_condition"
+    
+    # Return statement changes
+    if re.search(r'\breturn\b', added_text) or re.search(r'\breturn\b', removed_text):
+        return "modify_return"
+    
+    # Adding checks (None, isinstance, len, etc.)
+    check_patterns = [r'\bis\s+None\b', r'\bis\s+not\s+None\b', r'\bisinstance\b', r'\blen\(', r'\bhasattr\b']
+    if any(re.search(p, added_text) for p in check_patterns):
+        return "add_check"
+    
+    # Function call modifications
+    if re.search(r'\w+\(', added_text) and re.search(r'\w+\(', removed_text):
+        return "fix_call"
+    
+    # Assignment changes
+    if re.search(r'=\s*[^=]', added_text) and re.search(r'=\s*[^=]', removed_text):
+        return "modify_assignment"
+    
+    return "mixed"
+
+
+def extract_line_numbers_from_patch(patch: str) -> dict[str, list[tuple[int, int]]]:
+    """
+    Extract line number ranges modified in each file.
+    
+    Returns: {filename: [(start, end), ...]}
+    """
+    file_ranges = {}
+    current_file = None
+    
+    for line in patch.split('\n'):
+        # New file
+        if line.startswith('+++ b/'):
+            current_file = line[6:].strip()
+            if current_file not in file_ranges:
+                file_ranges[current_file] = []
+        
+        # Hunk header - extract line numbers
+        if line.startswith('@@') and current_file:
+            # Format: @@ -old_start,old_count +new_start,new_count @@
+            match = re.search(r'\+(\d+)(?:,(\d+))?', line)
+            if match:
+                start = int(match.group(1))
+                count = int(match.group(2)) if match.group(2) else 1
+                file_ranges[current_file].append((start, start + count - 1))
+    
+    return file_ranges
+
+
+def compute_location_overlap(agent_ranges: dict, gold_ranges: dict, tolerance: int = 10) -> float:
+    """
+    Compute overlap between modified locations.
+    
+    Args:
+        agent_ranges: {file: [(start, end), ...]} for agent patch
+        gold_ranges: {file: [(start, end), ...]} for gold patch
+        tolerance: Lines of tolerance for "nearby" match
+        
+    Returns:
+        Overlap score between 0 and 1
+    """
+    if not gold_ranges:
+        return 0.0
+    
+    total_gold_ranges = sum(len(ranges) for ranges in gold_ranges.values())
+    if total_gold_ranges == 0:
+        return 0.0
+    
+    matches = 0
+    
+    for file, gold_file_ranges in gold_ranges.items():
+        agent_file_ranges = agent_ranges.get(file, [])
+        
+        for g_start, g_end in gold_file_ranges:
+            # Check if any agent range overlaps or is nearby
+            for a_start, a_end in agent_file_ranges:
+                # Exact overlap
+                if not (a_end < g_start or a_start > g_end):
+                    matches += 1
+                    break
+                # Within tolerance
+                elif abs(a_start - g_start) <= tolerance or abs(a_end - g_end) <= tolerance:
+                    matches += 0.5
+                    break
+    
+    return matches / total_gold_ranges
+
+
+def analyze_semantic_correctness(
+    agent_patch: str,
+    gold_patch: str,
+    resolved: bool,
+    tests_passed: bool = False,
+    tests_no_regression: bool = True,
+) -> SemanticCorrectnessMetrics:
+    """
+    Analyze semantic/functional correctness of the agent's patch.
+    
+    This goes beyond textual similarity to assess whether the patch
+    is likely to be a correct fix, even if it differs from the gold.
+    """
+    metrics = SemanticCorrectnessMetrics()
+    
+    # Test-based correctness (most reliable)
+    metrics.tests_pass = resolved or tests_passed
+    metrics.tests_no_regression = tests_no_regression
+    
+    if not agent_patch:
+        return metrics
+    
+    # Extract structural information
+    agent_files = set(extract_files_from_patch(agent_patch))
+    gold_files = set(extract_files_from_patch(gold_patch))
+    
+    agent_functions = extract_functions_from_patch(agent_patch)
+    gold_functions = extract_functions_from_patch(gold_patch)
+    
+    agent_classes = extract_classes_from_patch(agent_patch)
+    gold_classes = extract_classes_from_patch(gold_patch)
+    
+    agent_variables = extract_variables_from_patch(agent_patch)
+    gold_variables = extract_variables_from_patch(gold_patch)
+    
+    # Store for debugging
+    metrics.agent_functions_modified = agent_functions
+    metrics.gold_functions_modified = gold_functions
+    metrics.agent_classes_modified = agent_classes
+    metrics.gold_classes_modified = gold_classes
+    
+    # Location analysis
+    metrics.fixes_same_file = bool(agent_files & gold_files)
+    metrics.fixes_same_function = bool(set(agent_functions) & set(gold_functions))
+    metrics.fixes_same_class = bool(set(agent_classes) & set(gold_classes))
+    
+    # Line-level location overlap
+    agent_ranges = extract_line_numbers_from_patch(agent_patch)
+    gold_ranges = extract_line_numbers_from_patch(gold_patch)
+    location_overlap = compute_location_overlap(agent_ranges, gold_ranges)
+    metrics.fixes_same_code_region = location_overlap > 0.3
+    metrics.location_score = location_overlap
+    
+    # Change type analysis
+    metrics.change_type = classify_change_type(agent_patch)
+    metrics.gold_change_type = classify_change_type(gold_patch)
+    metrics.change_type_match = metrics.change_type == metrics.gold_change_type
+    
+    # Variable/attribute analysis
+    metrics.modifies_same_variable = bool(set(agent_variables) & set(gold_variables))
+    
+    # Check for similar function calls modified
+    agent_calls = set(re.findall(r'(\w+)\s*\(', agent_patch))
+    gold_calls = set(re.findall(r'(\w+)\s*\(', gold_patch))
+    metrics.modifies_same_call = bool(agent_calls & gold_calls)
+    
+    # Check for similar conditional checks added
+    agent_checks = set(re.findall(r'if\s+([^:]+):', agent_patch))
+    gold_checks = set(re.findall(r'if\s+([^:]+):', gold_patch))
+    if agent_checks and gold_checks:
+        # Fuzzy match on conditions
+        for ac in agent_checks:
+            for gc in gold_checks:
+                if SequenceMatcher(None, ac, gc).ratio() > 0.5:
+                    metrics.adds_same_check = True
+                    break
+    
+    # Compute semantic similarity score (weighted combination)
+    score = 0.0
+    weights_applied = 0.0
+    
+    # Tests are most important (weight: 0.4)
+    if metrics.tests_pass:
+        score += 0.4
+        metrics.correctness_indicators.append("Tests pass")
+    weights_applied += 0.4
+    
+    # Same file is important (weight: 0.15)
+    if metrics.fixes_same_file:
+        score += 0.15
+        metrics.correctness_indicators.append("Same file modified")
+    else:
+        metrics.incorrectness_indicators.append("Different file modified")
+    weights_applied += 0.15
+    
+    # Same function is important (weight: 0.15)
+    if metrics.fixes_same_function:
+        score += 0.15
+        metrics.correctness_indicators.append(f"Same function(s) modified: {set(agent_functions) & set(gold_functions)}")
+    weights_applied += 0.15
+    
+    # Same change type (weight: 0.1)
+    if metrics.change_type_match:
+        score += 0.1
+        metrics.correctness_indicators.append(f"Same change type: {metrics.change_type}")
+    weights_applied += 0.1
+    
+    # Location overlap (weight: 0.1)
+    score += 0.1 * location_overlap
+    if location_overlap > 0.5:
+        metrics.correctness_indicators.append(f"Code region overlap: {location_overlap:.0%}")
+    weights_applied += 0.1
+    
+    # Variable/call matches (weight: 0.05 each)
+    if metrics.modifies_same_variable:
+        score += 0.05
+        metrics.correctness_indicators.append("Same variables modified")
+    if metrics.modifies_same_call:
+        score += 0.05
+        metrics.correctness_indicators.append("Same function calls modified")
+    weights_applied += 0.1
+    
+    metrics.semantic_similarity_score = score / weights_applied if weights_applied > 0 else 0.0
+    
+    # Final assessment
+    # "Likely correct" if:
+    # 1. Tests pass, OR
+    # 2. High semantic similarity AND fixes same location
+    metrics.likely_correct = (
+        metrics.tests_pass or
+        (metrics.semantic_similarity_score >= 0.6 and metrics.fixes_same_file and metrics.fixes_same_function) or
+        (metrics.semantic_similarity_score >= 0.7 and metrics.fixes_same_file)
+    )
+    
+    # Confidence score
+    confidence_factors = [
+        (0.4, metrics.tests_pass),
+        (0.2, metrics.fixes_same_file),
+        (0.15, metrics.fixes_same_function),
+        (0.1, metrics.change_type_match),
+        (0.1, metrics.fixes_same_code_region),
+        (0.05, metrics.modifies_same_variable),
+    ]
+    metrics.correctness_confidence = sum(weight for weight, condition in confidence_factors if condition)
+    
+    return metrics
+
+
+# =============================================================================
 # MAIN COMPUTATION FUNCTION
 # =============================================================================
 
@@ -1313,6 +1732,15 @@ def compute_debug_metrics(
     # Core metrics
     tool_metrics = analyze_tool_usage(messages, relevant_files)
     patch_metrics = analyze_patch_quality(agent_patch, gold_patch, relevant_files)
+    
+    # Semantic correctness (evaluates functional correctness beyond similarity)
+    semantic_metrics = analyze_semantic_correctness(
+        agent_patch=agent_patch,
+        gold_patch=gold_patch,
+        resolved=resolved,
+        tests_passed=(tests_passed > 0 and tests_failed == 0),
+        tests_no_regression=True,  # Would need pass_to_pass test results
+    )
     
     # New detailed metrics
     phase_metrics = analyze_phases(messages)
@@ -1352,6 +1780,7 @@ def compute_debug_metrics(
         tool_usage=tool_metrics,
         patch_quality=patch_metrics,
         failure_analysis=failure_analysis,
+        semantic_correctness=semantic_metrics,
         token_metrics=token_metrics,
         reasoning_metrics=reasoning_metrics,
         tool_argument_metrics=tool_arg_metrics,
@@ -1507,6 +1936,42 @@ def format_debug_report(metrics: DebugMetrics, agent_patch: str = "") -> str:
         lines.append(f"  Extra files: {metrics.patch_quality.extra_files_touched}")
     if metrics.patch_quality.missing_files:
         lines.append(f"  Missing files: {metrics.patch_quality.missing_files}")
+    lines.append("")
+    
+    # Semantic correctness (functional correctness beyond textual similarity)
+    lines.extend([
+        "## SEMANTIC CORRECTNESS",
+        f"  Tests pass: {metrics.semantic_correctness.tests_pass}",
+        f"  Likely correct: {metrics.semantic_correctness.likely_correct}",
+        f"  Correctness confidence: {metrics.semantic_correctness.correctness_confidence:.1%}",
+        f"  Semantic similarity score: {metrics.semantic_correctness.semantic_similarity_score:.1%}",
+        "",
+        "  Location Analysis:",
+        f"    Same file: {metrics.semantic_correctness.fixes_same_file}",
+        f"    Same function: {metrics.semantic_correctness.fixes_same_function}",
+        f"    Same class: {metrics.semantic_correctness.fixes_same_class}",
+        f"    Same code region: {metrics.semantic_correctness.fixes_same_code_region}",
+        f"    Location score: {metrics.semantic_correctness.location_score:.1%}",
+        "",
+        "  Change Analysis:",
+        f"    Agent change type: {metrics.semantic_correctness.change_type}",
+        f"    Gold change type: {metrics.semantic_correctness.gold_change_type}",
+        f"    Change type match: {metrics.semantic_correctness.change_type_match}",
+        f"    Same variable modified: {metrics.semantic_correctness.modifies_same_variable}",
+        f"    Same function call: {metrics.semantic_correctness.modifies_same_call}",
+    ])
+    if metrics.semantic_correctness.agent_functions_modified:
+        lines.append(f"    Agent modified functions: {metrics.semantic_correctness.agent_functions_modified}")
+    if metrics.semantic_correctness.gold_functions_modified:
+        lines.append(f"    Gold modified functions: {metrics.semantic_correctness.gold_functions_modified}")
+    if metrics.semantic_correctness.correctness_indicators:
+        lines.append("  Correctness indicators:")
+        for indicator in metrics.semantic_correctness.correctness_indicators:
+            lines.append(f"    ✓ {indicator}")
+    if metrics.semantic_correctness.incorrectness_indicators:
+        lines.append("  Incorrectness indicators:")
+        for indicator in metrics.semantic_correctness.incorrectness_indicators:
+            lines.append(f"    ✗ {indicator}")
     lines.append("")
     
     # Show actual patch

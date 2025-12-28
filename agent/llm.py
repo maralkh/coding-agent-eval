@@ -176,7 +176,7 @@ class LLMClient:
         }
         
         # o-series models (o1, o3, o4) use max_completion_tokens instead of max_tokens
-        is_o_series = self.model.startswith(("o1", "o3", "o4"))
+        is_o_series = self.model.startswith(("o1", "o3", "o4", "gpt-5"))
         if is_o_series:
             kwargs["max_completion_tokens"] = max_tokens
         else:
