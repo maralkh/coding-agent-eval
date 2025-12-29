@@ -174,12 +174,16 @@ class BenchmarkRunner:
         max_steps: int = 20,
         timeout: int = 600,
         verbose: bool = True,
+        n_samples: int = 1,
+        sampling_strategy: str = "first",
     ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.max_steps = max_steps
         self.timeout = timeout
         self.verbose = verbose
+        self.n_samples = n_samples
+        self.sampling_strategy = sampling_strategy
         
         # Results storage
         self.results: dict[str, dict[str, TaskResult]] = {}  # model -> task_id -> result
@@ -208,6 +212,8 @@ class BenchmarkRunner:
         print(f"Models: {[m.display_name for m in models]}")
         print(f"Output: {self.output_dir}")
         print(f"Max steps: {self.max_steps}")
+        if self.n_samples > 1:
+            print(f"Sampling: {self.n_samples} samples, strategy={self.sampling_strategy}")
         print("=" * 70)
         print()
         
@@ -249,7 +255,9 @@ class BenchmarkRunner:
                 # Print status
                 status = "✓ RESOLVED" if result.resolved else "✗ FAILED"
                 if result.error:
-                    status = f"✗ ERROR: {result.error[:30]}"
+                    # Show first line of error for cleaner output
+                    error_first_line = result.error.split('\n')[0][:50]
+                    status = f"✗ ERROR: {error_first_line}"
                 print(f"{status} ({result.steps} steps, {result.duration:.1f}s)")
         
         # Compute summaries
@@ -307,21 +315,37 @@ class BenchmarkRunner:
                 "--json-output",  # Output results as JSON
             ]
             
+            # Add sampling options if enabled
+            if self.n_samples > 1:
+                cmd.extend(["--n-samples", str(self.n_samples)])
+                cmd.extend(["--sampling-strategy", self.sampling_strategy])
+            
             proc = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=self.timeout,
+                timeout=self.timeout * self.n_samples,  # Scale timeout with samples
                 cwd=Path(__file__).parent,
             )
             
             result.duration = time.time() - start_time
             
+            # Show output in verbose mode
+            if self.verbose and proc.stdout:
+                # Show first few lines of output for debugging
+                lines = proc.stdout.strip().split('\n')
+                if len(lines) > 5:
+                    for line in lines[:3]:
+                        print(f"      {line[:80]}")
+                    print(f"      ... ({len(lines) - 3} more lines)")
+            
             # Parse JSON output from test_e2e.py
             if proc.returncode == 0:
                 result = self._parse_run_output(proc.stdout, result)
             else:
-                result.error = proc.stderr[:200] if proc.stderr else "Unknown error"
+                # Show more of the error for debugging
+                error_msg = proc.stderr if proc.stderr else proc.stdout
+                result.error = error_msg[:500] if error_msg else "Unknown error"
                 
         except subprocess.TimeoutExpired:
             result.duration = self.timeout
@@ -676,6 +700,20 @@ Examples:
         help="Only view existing results, don't run new benchmarks",
     )
     
+    # Sampling options
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=1,
+        help="Number of samples per task (default: 1, no sampling)",
+    )
+    parser.add_argument(
+        "--sampling-strategy",
+        choices=["first", "best_of_n", "majority_vote", "pass_at_k"],
+        default="first",
+        help="Sampling strategy: first (default), best_of_n, majority_vote, pass_at_k",
+    )
+    
     args = parser.parse_args()
     
     # Results only mode
@@ -716,6 +754,8 @@ Examples:
         output_dir=args.output,
         max_steps=args.max_steps,
         timeout=args.timeout,
+        n_samples=args.n_samples,
+        sampling_strategy=args.sampling_strategy,
     )
     
     runner.run(

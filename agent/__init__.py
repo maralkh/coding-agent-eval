@@ -12,6 +12,7 @@ from .repo_tools import (
     run_tests,
     run_command,
 )
+from .sampling import SamplingConfig, SamplingResult, default_scorer
 
 __all__ = [
     # Original agent
@@ -20,6 +21,10 @@ __all__ = [
     # Repo agent
     "RepoAgent",
     "RepoAgentResult",
+    # Sampling
+    "SamplingConfig",
+    "SamplingResult",
+    "default_scorer",
     # LLM
     "LLMClient",
     # Tools

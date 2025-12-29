@@ -114,22 +114,48 @@ def test_repo_setup(task):
         return None
 
 
-def test_agent(task, repo_path, max_steps: int = 10, provider: str = None, model: str = None):
+def test_agent(task, repo_path, max_steps: int = 10, provider: str = None, model: str = None,
+               n_samples: int = 1, sampling_strategy: str = "first"):
     """Test running the agent."""
-    print(f"\n4. Running agent (max_steps={max_steps}, provider={provider or 'auto'}, model={model or 'default'})...")
-    
     from agent import RepoAgent
+    from agent.repo_agent import RepoAgentResult
+    
+    if n_samples > 1:
+        print(f"\n4. Running agent with sampling (n={n_samples}, strategy={sampling_strategy})...")
+    else:
+        print(f"\n4. Running agent (max_steps={max_steps}, provider={provider or 'auto'}, model={model or 'default'})...")
     
     try:
         agent = RepoAgent(max_steps=max_steps, provider=provider, model=model)
         
-        result = agent.solve(
-            task=task,
-            repo_path=repo_path,
-            include_hints=True,
-        )
+        if n_samples > 1:
+            # Use sampling
+            sampling_result = agent.solve_with_sampling(
+                task=task,
+                repo_path=repo_path,
+                n_samples=n_samples,
+                strategy=sampling_strategy,
+                include_hints=True,
+            )
+            result = sampling_result.selected_result
+            
+            print(f"   ✓ Agent completed ({n_samples} samples)")
+            print(f"     Strategy: {sampling_strategy}")
+            print(f"     Selected sample: {sampling_result.selected_index + 1}/{n_samples}")
+            print(f"     Samples with patches: {sampling_result.n_with_patch}/{n_samples}")
+            print(f"     Samples submitted: {sampling_result.n_submitted}/{n_samples}")
+            if sampling_result.scores:
+                print(f"     Scores: {[f'{s:.1f}' for s in sampling_result.scores]}")
+        else:
+            # Single run (original behavior)
+            result = agent.solve(
+                task=task,
+                repo_path=repo_path,
+                include_hints=True,
+            )
+            sampling_result = None
+            print(f"   ✓ Agent completed")
         
-        print(f"   ✓ Agent completed")
         print(f"     Success: {result.success}")
         print(f"     Steps: {result.steps}")
         print(f"     Patch size: {len(result.patch)} chars")
@@ -152,7 +178,15 @@ def test_agent(task, repo_path, max_steps: int = 10, provider: str = None, model
         print(f"   ✗ Error running agent: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        # Return an error result instead of None
+        return RepoAgentResult(
+            success=False,
+            patch="",
+            explanation="",
+            steps=0,
+            messages=[],
+            error=str(e),
+        )
 
 
 def test_evaluation(task, repo_path, agent_result):
@@ -627,6 +661,18 @@ def main():
         action="store_true",
         help="Output results as JSON (for benchmark script)",
     )
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=1,
+        help="Number of samples per task (default: 1)",
+    )
+    parser.add_argument(
+        "--sampling-strategy",
+        choices=["first", "best_of_n", "majority_vote", "pass_at_k"],
+        default="first",
+        help="Sampling strategy (default: first)",
+    )
     
     args = parser.parse_args()
     
@@ -674,7 +720,11 @@ def main():
     # Test agent (optional)
     agent_result = None
     if not args.skip_agent:
-        agent_result = test_agent(task, repo_path, args.max_steps, args.provider, args.model)
+        agent_result = test_agent(
+            task, repo_path, args.max_steps, args.provider, args.model,
+            n_samples=args.n_samples,
+            sampling_strategy=args.sampling_strategy,
+        )
         if not agent_result:
             all_passed = False
     else:
@@ -716,6 +766,7 @@ def main():
             "trajectory_efficiency": metrics.trajectory_metrics.trajectory_efficiency if metrics else 0.0,
             "primary_failure_mode": metrics.failure_analysis.primary_failure_mode if metrics else "",
             "failure_reasons": metrics.failure_analysis.failure_reasons if metrics else [],
+            "error": agent_result.error if agent_result and agent_result.error else "",
         }
         print("===JSON_OUTPUT===")
         print(json.dumps(json_result))

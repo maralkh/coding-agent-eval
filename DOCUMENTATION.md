@@ -69,13 +69,27 @@ coding-agent-eval/
 │       ├── runner.py           # Main evaluation orchestrator
 │       └── metrics.py          # Debug metrics & analysis
 │
+├── classifier/                 # Success prediction classifier
+│   ├── __init__.py
+│   ├── collect_training_data.py  # Collect metrics from runs
+│   ├── train_classifier.py       # Train & evaluate classifier
+│   └── generate_synthetic_data.py # Generate test data
+│
 ├── results/                    # Output directory
 │   ├── runs.jsonl              # Summary of all runs
 │   └── *.json                  # Detailed per-run results
 │
+├── training_data/              # Training data for classifier
+│   └── training_data.jsonl     # Feature vectors + labels
+│
+├── models/                     # Trained classifier models
+│   ├── classifier.joblib       # Saved model
+│   └── evaluation_results.json # Training metrics
+│
 ├── collect_tasks.py            # CLI: Collect tasks from GitHub
-├── run_eval.py                 # CLI: Run batch evaluations
+├── run_eval.py                 # CLI: Run batch evaluations  
 ├── test_e2e.py                 # CLI: End-to-end testing
+├── benchmark.py                # CLI: Compare multiple models
 └── requirements.txt
 ```
 
@@ -750,6 +764,87 @@ python benchmark.py --tasks eval/tasks/ --models gpt-4o --max-tasks 3
 python benchmark.py --results-only -o results/benchmark/
 ```
 
+### Sampling Strategies
+
+The framework supports multiple sampling strategies to improve resolve rates:
+
+```bash
+# Best-of-N: Run 5 samples, select the one with highest heuristic score
+python benchmark.py --tasks eval/tasks/ --models gpt-4o \
+    --n-samples 5 --sampling-strategy best_of_n
+
+# Majority voting: Run 5 samples, select most common patch
+python benchmark.py --tasks eval/tasks/ --models gpt-4o \
+    --n-samples 5 --sampling-strategy majority_vote
+
+# Pass@k: Run k samples, report if any succeed
+python benchmark.py --tasks eval/tasks/ --models gpt-4o \
+    --n-samples 5 --sampling-strategy pass_at_k
+```
+
+#### Available Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `first` | Use single run (default, no sampling) |
+| `best_of_n` | Score each sample using heuristics, select highest |
+| `majority_vote` | Select the most common patch across samples |
+| `pass_at_k` | Report success if any sample resolves the task |
+
+#### Scoring Heuristics (best_of_n)
+
+The default scorer evaluates samples based on:
+- Whether the agent submitted (+10 points)
+- Patch was generated (+5 points)
+- Smaller patches preferred (+2 for <20 lines)
+- Fewer steps preferred (efficiency bonus)
+- Has explanation (+1 point)
+- Errors penalized (-5 points)
+
+#### Programmatic Usage
+
+```python
+from agent import RepoAgent, SamplingConfig
+
+agent = RepoAgent(max_steps=20, provider="anthropic", model="claude-sonnet-4-20250514")
+
+# Using built-in sampling method
+result = agent.solve_with_sampling(
+    task=task,
+    repo_path=repo_path,
+    n_samples=5,
+    strategy="best_of_n",
+)
+
+print(f"Selected sample {result.selected_index + 1} of {result.n_samples}")
+print(f"Scores: {result.scores}")
+print(f"Samples with patches: {result.n_with_patch}")
+
+# Access the selected result
+patch = result.selected_result.patch
+```
+
+#### Custom Scorer
+
+```python
+from agent.sampling import SamplingConfig, run_sampling
+
+def my_scorer(result):
+    """Custom scoring function."""
+    score = 0.0
+    if result.success:
+        score += 100
+    if "test" in result.explanation.lower():
+        score += 10  # Bonus for mentioning tests
+    return score
+
+config = SamplingConfig(
+    n_samples=5,
+    strategy="best_of_n",
+    scorer=my_scorer,
+)
+```
+
 #### Benchmark Output
 
 ```
@@ -899,3 +994,140 @@ MIT License - see [LICENSE](LICENSE) for details.
 - Inspired by [SWE-bench](https://www.swebench.com/)
 - Built with Claude (Anthropic)
 - Tested on scikit-learn
+
+## Training a Success Classifier
+
+The framework includes tools to train a classifier that predicts whether an agent will succeed based on behavioral metrics.
+
+### Pipeline Overview
+
+```
+1. Collect training data (run agent on tasks, extract metrics)
+   ↓
+2. Generate feature vectors from metrics
+   ↓
+3. Train classifier (Random Forest, Logistic Regression, SVM, etc.)
+   ↓
+4. Use classifier to predict success on new runs
+```
+
+### Step 1: Collect Training Data
+
+```bash
+# Run agent on tasks and collect metrics
+python classifier/collect_training_data.py --tasks eval/tasks/ --provider openai --model gpt-4o
+
+# Or load from existing results
+python classifier/collect_training_data.py --from-results results/
+
+# View dataset statistics
+python classifier/collect_training_data.py --stats
+```
+
+Output:
+```
+============================================================
+TRAINING DATA STATISTICS
+============================================================
+
+Total examples: 200
+Resolved: 80 (40.0%)
+Failed: 120 (60.0%)
+
+By Model:
+  openai:gpt-4o: 45/100 (45.0%)
+  openai:gpt-4o-mini: 35/100 (35.0%)
+
+Feature Statistics (resolved vs failed):
+
+Feature                   Resolved     Failed       Diff
+------------------------------------------------------------
+Reasoning Quality         0.79         0.25         +0.54
+Exploration Efficiency    0.77         0.17         +0.59
+Trajectory Efficiency     0.80         0.34         +0.46
+```
+
+### Step 2: Train Classifier
+
+```bash
+# Train with default settings (Random Forest)
+python classifier/train_classifier.py --data training_data/
+
+# Try different classifiers
+python classifier/train_classifier.py --data training_data/ --classifier logistic
+python classifier/train_classifier.py --data training_data/ --classifier gradient_boosting
+
+# Show feature correlations
+python classifier/train_classifier.py --data training_data/ --show-correlations
+```
+
+Output:
+```
+======================================================================
+CLASSIFIER EVALUATION RESULTS
+======================================================================
+
+Classifier: random_forest
+Samples: 200
+Features: 51
+Positive rate: 40.0%
+
+Cross-Validation Results (5-fold):
+----------------------------------------
+  Accuracy:  0.875 ± 0.032
+  Precision: 0.842 ± 0.045
+  Recall:    0.812 ± 0.051
+  F1 Score:  0.826 ± 0.038
+
+Top 15 Most Important Features:
+----------------------------------------
+   1. unnecessary_steps                   0.143 ███████
+   2. relevant_file_discovery_step        0.114 █████
+   3. edit_to_explore_ratio               0.090 ████
+   4. reasoning_quality_score             0.076 ███
+   5. exploration_efficiency              0.073 ███
+```
+
+### Step 3: Use for Prediction
+
+```bash
+# Predict success from metrics
+python classifier/train_classifier.py --predict \
+    --model models/classifier.joblib \
+    --metrics run_metrics.json
+```
+
+Output:
+```json
+{
+  "prediction": true,
+  "predicted_label": "resolved",
+  "probability_resolved": 0.76,
+  "probability_failed": 0.24,
+  "confidence": 0.76
+}
+```
+
+### Feature Columns (51 total)
+
+| Category | Features |
+|----------|----------|
+| Reasoning | reasoning_quality_score, has_explicit_reasoning, mentions_issue_keywords, hypothesizes_before_acting, explains_changes, verifies_after_change |
+| Phases | exploration_steps, implementation_steps, verification_steps, exploration_pct, followed_read_before_write, followed_test_after_change |
+| Exploration | exploration_strategy, files_explored, relevant_file_discovery_step, exploration_efficiency, wasted_explorations |
+| Trajectory | trajectory_length, trajectory_efficiency, unnecessary_steps |
+| Convergence | final_similarity, converged, monotonic_progress, had_regression, progress_volatility |
+| Error Recovery | total_errors, recovery_rate, stuck_episodes, max_stuck_duration |
+| Tool Usage | total_tool_calls, read_relevant_files, ran_tests, submitted, tool_errors_count |
+| Patch Quality | correct_files_touched, lines_added, lines_removed, patch_too_large |
+
+### Insights from Feature Importance
+
+Based on classifier analysis, the most predictive features are:
+
+1. **unnecessary_steps** - Fewer wasted actions = success
+2. **relevant_file_discovery_step** - Finding bug location early = success  
+3. **edit_to_explore_ratio** - More editing, less wandering = success
+4. **reasoning_quality_score** - Clear thinking = success
+5. **exploration_efficiency** - Focused exploration = success
+

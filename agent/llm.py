@@ -77,7 +77,7 @@ class LLMClient:
         """Infer provider from model name."""
         if model.startswith("claude"):
             return "anthropic"
-        elif model.startswith("gpt"):
+        elif model.startswith(("gpt", "o1", "o3", "o4")):
             return "openai"
         elif model.startswith("llama") or model.startswith("mixtral"):
             return "groq"
@@ -88,15 +88,33 @@ class LLMClient:
         """Initialize the appropriate client."""
         if self.provider == "anthropic":
             import anthropic
-            self.client = anthropic.Anthropic()
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "ANTHROPIC_API_KEY environment variable not set. "
+                    "Please set it with: export ANTHROPIC_API_KEY=your-key-here"
+                )
+            self.client = anthropic.Anthropic(api_key=api_key)
             
         elif self.provider == "groq":
             from groq import Groq
-            self.client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+            api_key = os.environ.get("GROQ_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "GROQ_API_KEY environment variable not set. "
+                    "Please set it with: export GROQ_API_KEY=your-key-here"
+                )
+            self.client = Groq(api_key=api_key)
             
         elif self.provider == "openai":
             from openai import OpenAI
-            self.client = OpenAI()
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "OPENAI_API_KEY environment variable not set. "
+                    "Please set it with: export OPENAI_API_KEY=your-key-here"
+                )
+            self.client = OpenAI(api_key=api_key)
             
         elif self.provider == "ollama":
             # Ollama uses OpenAI-compatible API
@@ -175,9 +193,9 @@ class LLMClient:
             "messages": oai_messages,
         }
         
-        # o-series models (o1, o3, o4) use max_completion_tokens instead of max_tokens
-        is_o_series = self.model.startswith(("o1", "o3", "o4", "gpt-5"))
-        if is_o_series:
+        # o-series models (o1, o3, o4) and gpt-5+ use max_completion_tokens instead of max_tokens
+        is_new_api = self.model.startswith(("o1", "o3", "o4", "gpt-5"))
+        if is_new_api:
             kwargs["max_completion_tokens"] = max_tokens
         else:
             kwargs["max_tokens"] = max_tokens

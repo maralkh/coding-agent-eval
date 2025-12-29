@@ -55,6 +55,7 @@ class RepoAgent:
             RepoAgentResult with patch and metadata
         """
         repo_path = Path(repo_path).resolve()
+        print(f"    [Agent using repo_path: {repo_path}]")
 
         # Format the prompt
         user_prompt = format_repo_task_prompt(
@@ -69,13 +70,31 @@ class RepoAgent:
 
         while steps < self.max_steps:
             steps += 1
+            print(f"    [Step {steps}/{self.max_steps}]")
 
             # Get LLM response
-            response = self.llm.chat(
-                messages=messages,
-                system=REPO_SYSTEM_PROMPT,
-                tools=REPO_TOOLS,
-            )
+            try:
+                response = self.llm.chat(
+                    messages=messages,
+                    system=REPO_SYSTEM_PROMPT,
+                    tools=REPO_TOOLS,
+                )
+            except Exception as e:
+                # Return error result if LLM call fails
+                return RepoAgentResult(
+                    success=False,
+                    patch="",
+                    explanation="",
+                    steps=steps,
+                    messages=messages,
+                    error=f"LLM error: {str(e)}",
+                )
+            
+            # Debug: show stop reason
+            print(f"    [Stop reason: {response.stop_reason}]")
+            print(f"    [Content blocks: {len(response.content)}]")
+            for i, block in enumerate(response.content):
+                print(f"    [Block {i}: type={getattr(block, 'type', 'unknown')}]")
 
             # Process response content
             assistant_content = []
@@ -102,6 +121,8 @@ class RepoAgent:
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
+                    print(f"    [Tool call: {block.name}]")
+                    
                     # Check if this is the final submission
                     if block.name == "submit_patch":
                         explanation = block.input.get("explanation", "")
@@ -187,3 +208,62 @@ class RepoAgent:
             return result.stdout
         except Exception as e:
             return f"Error getting diff: {e}"
+
+    def _reset_repo(self, repo_path: Path) -> None:
+        """Reset repository to clean state."""
+        try:
+            subprocess.run(
+                ["git", "checkout", "."],
+                cwd=repo_path,
+                capture_output=True,
+                timeout=30,
+            )
+            subprocess.run(
+                ["git", "clean", "-fd"],
+                cwd=repo_path,
+                capture_output=True,
+                timeout=30,
+            )
+        except Exception:
+            pass  # Best effort
+
+    def solve_with_sampling(
+        self,
+        task: "Task",
+        repo_path: str | Path,
+        n_samples: int = 1,
+        strategy: str = "best_of_n",
+        include_hints: bool = True,
+        scorer: callable = None,
+    ) -> "SamplingResult":
+        """
+        Solve a task using sampling strategies.
+        
+        Args:
+            task: Task object containing issue details
+            repo_path: Path to the cloned repository
+            n_samples: Number of samples to generate
+            strategy: "best_of_n", "majority_vote", "pass_at_k", or "first"
+            include_hints: Whether to include relevant_files hints
+            scorer: Optional scoring function for best_of_n
+            
+        Returns:
+            SamplingResult containing selected result and all samples
+        """
+        from .sampling import SamplingConfig, run_sampling
+        
+        repo_path = Path(repo_path)
+        
+        config = SamplingConfig(
+            n_samples=n_samples,
+            strategy=strategy,
+            scorer=scorer,
+        )
+        
+        def solve_once():
+            return self.solve(task, repo_path, include_hints)
+        
+        def reset_repo():
+            self._reset_repo(repo_path)
+        
+        return run_sampling(solve_once, config, reset_repo)
