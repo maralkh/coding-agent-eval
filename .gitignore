@@ -1,1 +1,82 @@
-*.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+
+# Local development
+.env
+.envrc
+
+# Collected tasks (keep sample tasks, ignore bulk collected)
+eval/tasks/*.json
+!eval/tasks/scikit-learn__scikit-learn-28280.json
+!eval/tasks/scikit-learn__scikit-learn-27000.json
+
+# Evaluation results
+results/
+logs/
+*.log
+
+# Cloned repos for testing
+repos/
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Training data and models
+training_data/*.jsonl
+models/*.joblib
+
+# LaTeX auxiliary files
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.synctex.gz
