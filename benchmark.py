@@ -176,6 +176,7 @@ class BenchmarkRunner:
         verbose: bool = True,
         n_samples: int = 1,
         sampling_strategy: str = "first",
+        detailed_metrics: bool = False,
     ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,6 +185,7 @@ class BenchmarkRunner:
         self.verbose = verbose
         self.n_samples = n_samples
         self.sampling_strategy = sampling_strategy
+        self.detailed_metrics = detailed_metrics
         
         # Results storage
         self.results: dict[str, dict[str, TaskResult]] = {}  # model -> task_id -> result
@@ -319,6 +321,10 @@ class BenchmarkRunner:
             if self.n_samples > 1:
                 cmd.extend(["--n-samples", str(self.n_samples)])
                 cmd.extend(["--sampling-strategy", self.sampling_strategy])
+            
+            # Add detailed metrics flag if enabled
+            if self.detailed_metrics:
+                cmd.append("--detailed-metrics")
             
             proc = subprocess.run(
                 cmd,
@@ -714,6 +720,13 @@ Examples:
         help="Sampling strategy: first (default), best_of_n, majority_vote, pass_at_k",
     )
     
+    # Detailed metrics
+    parser.add_argument(
+        "--detailed-metrics",
+        action="store_true",
+        help="Compute and save additional detailed metrics (phase distribution, convergence, etc.)",
+    )
+    
     args = parser.parse_args()
     
     # Results only mode
@@ -756,6 +769,7 @@ Examples:
         timeout=args.timeout,
         n_samples=args.n_samples,
         sampling_strategy=args.sampling_strategy,
+        detailed_metrics=args.detailed_metrics,
     )
     
     runner.run(

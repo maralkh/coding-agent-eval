@@ -15,7 +15,7 @@ Usage:
     python visualize_results.py --results results/ --images-only --output-dir charts/
     
     # Compare specific benchmark files
-    python visualize_results.py --benchmark results/benchmark/benchmark_result.json
+    python visualize_results.py --benchmark results/benchmark_20241228_120000.json
 """
 
 import argparse
@@ -190,12 +190,12 @@ def create_model_comparison_chart(summaries: list[ModelSummary]) -> str:
     bars4 = ax.bar(x + 1.5*width, reasoning, width, label='Reasoning Score', color='#e74c3c')
     
     ax.set_xlabel('Model')
-    ax.set_ylabel('Percentage')
+    ax.set_ylabel('Percentage (%)')
     ax.set_title('Model Performance Comparison')
     ax.set_xticks(x)
     ax.set_xticklabels(models, rotation=45, ha='right')
     ax.legend()
-    ax.set_ylim(0, 105)
+    ax.set_ylim(0, 105)  # Extra space for labels
     
     # Add value labels
     for bars in [bars1, bars2, bars3, bars4]:
@@ -245,7 +245,7 @@ def create_efficiency_chart(summaries: list[ModelSummary]) -> str:
 
 
 def create_steps_distribution_chart(task_results: list[TaskResult]) -> str:
-    """Create histogram of steps taken per model."""
+    """Create histogram of steps taken per model (normalized to percentage)."""
     if not task_results:
         return ""
     
@@ -259,10 +259,16 @@ def create_steps_distribution_chart(task_results: list[TaskResult]) -> str:
     colors = plt.cm.Set2(np.linspace(0, 1, len(model_steps)))
     
     for i, (model, steps) in enumerate(model_steps.items()):
-        ax.hist(steps, bins=20, alpha=0.6, label=model, color=colors[i])
+        if not steps:
+            continue
+        # Use weights to normalize to percentage
+        steps_arr = np.array(steps)
+        weights = np.ones(len(steps)) / len(steps) * 100
+        ax.hist(steps_arr, bins=20, alpha=0.6, label=model, color=colors[i], weights=weights)
     
     ax.set_xlabel('Number of Steps')
-    ax.set_ylabel('Frequency')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_ylim(0, 100)
     ax.set_title('Distribution of Steps Taken')
     ax.legend()
     
@@ -273,18 +279,20 @@ def create_steps_distribution_chart(task_results: list[TaskResult]) -> str:
 
 
 def create_failure_mode_chart(summaries: list[ModelSummary]) -> str:
-    """Create failure mode breakdown chart."""
+    """Create failure mode breakdown chart (normalized to percentage)."""
     if not summaries:
         return ""
     
     # Aggregate failure modes across all models
     all_failures = defaultdict(int)
+    total_failures = 0
     for s in summaries:
         for mode, count in s.failure_modes.items():
             if mode and count > 0:
                 all_failures[mode] += count
+                total_failures += count
     
-    if not all_failures:
+    if not all_failures or total_failures == 0:
         return ""
     
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -292,23 +300,27 @@ def create_failure_mode_chart(summaries: list[ModelSummary]) -> str:
     modes = list(all_failures.keys())
     counts = list(all_failures.values())
     
-    # Sort by count
-    sorted_pairs = sorted(zip(counts, modes), reverse=True)
-    counts, modes = zip(*sorted_pairs) if sorted_pairs else ([], [])
+    # Convert to percentages
+    percentages = [c / total_failures * 100 for c in counts]
+    
+    # Sort by percentage
+    sorted_pairs = sorted(zip(percentages, modes, counts), reverse=True)
+    percentages, modes, counts = zip(*sorted_pairs) if sorted_pairs else ([], [], [])
     
     # Truncate long mode names
     modes = [m[:30] + '...' if len(m) > 30 else m for m in modes]
     
     colors = plt.cm.Reds(np.linspace(0.3, 0.9, len(modes)))
     
-    bars = ax.barh(modes, counts, color=colors)
-    ax.set_xlabel('Count')
+    bars = ax.barh(modes, percentages, color=colors)
+    ax.set_xlabel('Percentage (%)')
+    ax.set_xlim(0, 100)
     ax.set_title('Failure Mode Distribution')
     
     # Add value labels
-    for bar, count in zip(bars, counts):
-        ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height()/2,
-                str(count), va='center', fontsize=9)
+    for bar, pct, count in zip(bars, percentages, counts):
+        ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
+                f'{pct:.1f}% (n={count})', va='center', fontsize=9)
     
     plt.tight_layout()
     result = fig_to_base64(fig)
@@ -317,7 +329,7 @@ def create_failure_mode_chart(summaries: list[ModelSummary]) -> str:
 
 
 def create_per_model_failure_chart(summaries: list[ModelSummary]) -> str:
-    """Create stacked bar chart of failure modes per model."""
+    """Create stacked bar chart of failure modes per model (normalized to percentage)."""
     if not summaries:
         return ""
     
@@ -335,17 +347,26 @@ def create_per_model_failure_chart(summaries: list[ModelSummary]) -> str:
     models = [s.model for s in summaries]
     x = np.arange(len(models))
     
+    # Calculate total failures per model for normalization
+    model_totals = []
+    for s in summaries:
+        total = sum(s.failure_modes.get(mode, 0) for mode in all_modes)
+        model_totals.append(total if total > 0 else 1)  # Avoid division by zero
+    
     bottom = np.zeros(len(models))
     colors = plt.cm.tab20(np.linspace(0, 1, len(all_modes)))
     
     for i, mode in enumerate(all_modes):
         counts = [s.failure_modes.get(mode, 0) for s in summaries]
-        ax.bar(x, counts, bottom=bottom, label=mode[:20], color=colors[i])
-        bottom += counts
+        # Normalize to percentage per model
+        percentages = np.array([c / t * 100 for c, t in zip(counts, model_totals)])
+        ax.bar(x, percentages, bottom=bottom, label=mode[:20], color=colors[i])
+        bottom = bottom + percentages
     
     ax.set_xlabel('Model')
-    ax.set_ylabel('Failure Count')
-    ax.set_title('Failure Modes by Model')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_ylim(0, 100)
+    ax.set_title('Failure Modes by Model (Normalized)')
     ax.set_xticks(x)
     ax.set_xticklabels(models, rotation=45, ha='right')
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
@@ -470,7 +491,7 @@ def create_success_by_task_chart(task_results: list[TaskResult]) -> str:
 
 
 def create_metrics_correlation_chart(task_results: list[TaskResult]) -> str:
-    """Create scatter plot of metrics correlations."""
+    """Create scatter plot of metrics correlations (normalized to percentage)."""
     if not task_results or len(task_results) < 5:
         return ""
     
@@ -480,9 +501,14 @@ def create_metrics_correlation_chart(task_results: list[TaskResult]) -> str:
     ax = axes[0, 0]
     resolved = [tr.similarity_score for tr in task_results if tr.resolved]
     failed = [tr.similarity_score for tr in task_results if not tr.resolved]
-    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], color=['#2ecc71', '#e74c3c'])
+    # Normalize with weights
+    weights_resolved = np.ones(len(resolved)) / len(resolved) * 100 if resolved else []
+    weights_failed = np.ones(len(failed)) / len(failed) * 100 if failed else []
+    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], 
+            color=['#2ecc71', '#e74c3c'], weights=[weights_resolved, weights_failed])
     ax.set_xlabel('Similarity Score')
-    ax.set_ylabel('Count')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_ylim(0, 100)
     ax.set_title('Similarity Score Distribution')
     ax.legend()
     
@@ -490,9 +516,13 @@ def create_metrics_correlation_chart(task_results: list[TaskResult]) -> str:
     ax = axes[0, 1]
     resolved = [tr.reasoning_score for tr in task_results if tr.resolved]
     failed = [tr.reasoning_score for tr in task_results if not tr.resolved]
-    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], color=['#2ecc71', '#e74c3c'])
+    weights_resolved = np.ones(len(resolved)) / len(resolved) * 100 if resolved else []
+    weights_failed = np.ones(len(failed)) / len(failed) * 100 if failed else []
+    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], 
+            color=['#2ecc71', '#e74c3c'], weights=[weights_resolved, weights_failed])
     ax.set_xlabel('Reasoning Score')
-    ax.set_ylabel('Count')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_ylim(0, 100)
     ax.set_title('Reasoning Score Distribution')
     ax.legend()
     
@@ -500,9 +530,13 @@ def create_metrics_correlation_chart(task_results: list[TaskResult]) -> str:
     ax = axes[1, 0]
     resolved = [tr.steps for tr in task_results if tr.resolved]
     failed = [tr.steps for tr in task_results if not tr.resolved]
-    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], color=['#2ecc71', '#e74c3c'], alpha=0.7)
+    weights_resolved = np.ones(len(resolved)) / len(resolved) * 100 if resolved else []
+    weights_failed = np.ones(len(failed)) / len(failed) * 100 if failed else []
+    ax.hist([resolved, failed], bins=20, label=['Resolved', 'Failed'], 
+            color=['#2ecc71', '#e74c3c'], alpha=0.7, weights=[weights_resolved, weights_failed])
     ax.set_xlabel('Steps')
-    ax.set_ylabel('Count')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_ylim(0, 100)
     ax.set_title('Steps Distribution')
     ax.legend()
     
@@ -516,6 +550,8 @@ def create_metrics_correlation_chart(task_results: list[TaskResult]) -> str:
     )
     ax.set_xlabel('Exploration Efficiency')
     ax.set_ylabel('Trajectory Efficiency')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.set_title('Exploration vs Trajectory Efficiency')
     # Legend
     resolved_patch = mpatches.Patch(color='#2ecc71', label='Resolved')

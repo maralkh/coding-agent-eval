@@ -845,6 +845,42 @@ config = SamplingConfig(
 )
 ```
 
+### Detailed Metrics
+
+By default, the benchmark saves core metrics (resolved, steps, similarity, reasoning, exploration efficiency, trajectory efficiency). For deeper analysis, enable detailed metrics:
+
+```bash
+# Run with detailed metrics
+python benchmark.py --tasks eval/tasks/ --models gpt-4o --detailed-metrics
+
+# Single task with detailed metrics
+python test_e2e.py --task eval/tasks/task.json --detailed-metrics
+```
+
+#### Core Metrics (always saved)
+
+| Metric | Description |
+|--------|-------------|
+| `similarity_score` | Textual overlap with gold patch |
+| `reasoning_score` | Quality of agent reasoning |
+| `exploration_efficiency` | Fraction of explored files that were relevant |
+| `trajectory_efficiency` | How close to optimal path |
+| `primary_failure_mode` | Main reason for failure |
+| `failure_reasons` | List of contributing factors |
+
+#### Additional Metrics (with `--detailed-metrics`)
+
+| Category | Metrics |
+|----------|---------|
+| Tool Usage | total_calls, calls_by_tool, tool_errors |
+| Patch Quality | lines_added, lines_removed, file precision/recall |
+| Reasoning | keyword coverage, hypothesis formation, verification |
+| Phases | exploration/implementation/verification distribution |
+| Exploration | files explored, discovery step, wasted explorations |
+| Trajectory | optimal length, unnecessary steps |
+| Convergence | progress curve, volatility, regressions |
+| Error Recovery | total errors, recovery rate, stuck episodes |
+
 #### Benchmark Output
 
 ```

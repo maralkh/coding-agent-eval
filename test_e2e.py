@@ -268,6 +268,7 @@ def save_run_results(
     model: str,
     max_steps: int,
     output_dir: str = "results",
+    detailed_metrics: bool = False,
 ):
     """Save run results to a JSON file."""
     output_path = Path(output_dir)
@@ -290,6 +291,7 @@ def save_run_results(
             "provider": provider,
             "model": model,
             "max_steps": max_steps,
+            "detailed_metrics": detailed_metrics,
         },
         "agent": {
             "success": agent_result.success if agent_result else False,
@@ -309,96 +311,101 @@ def save_run_results(
         "metrics": {},
     }
     
-    # Add debug metrics if available
+    # Add core metrics (always saved)
     if metrics:
-        result["metrics"] = {
-            "tool_usage": {
-                "total_calls": metrics.tool_usage.total_calls,
-                "calls_by_tool": metrics.tool_usage.calls_by_tool,
-                "tool_sequence": metrics.tool_usage.tool_sequence,
-                "read_relevant_files": metrics.tool_usage.read_relevant_files,
-                "used_str_replace": metrics.tool_usage.used_str_replace,
-                "used_write_file": metrics.tool_usage.used_write_file,
-                "ran_tests": metrics.tool_usage.ran_tests,
-                "submitted": metrics.tool_usage.submitted,
-                "tool_errors": metrics.tool_usage.tool_errors,
-            },
-            "patch_quality": {
-                "files_changed": metrics.patch_quality.files_changed,
-                "gold_files_touched": metrics.patch_quality.gold_files_touched,
-                "correct_files_touched": metrics.patch_quality.correct_files_touched,
-                "extra_files_touched": metrics.patch_quality.extra_files_touched,
-                "missing_files": metrics.patch_quality.missing_files,
-                "lines_added": metrics.patch_quality.lines_added,
-                "lines_removed": metrics.patch_quality.lines_removed,
-                "similarity_score": metrics.patch_quality.similarity_score,
-                "line_level_similarity": metrics.patch_quality.line_level_similarity,
-                "patch_too_large": metrics.patch_quality.patch_too_large,
-            },
-            "reasoning": {
-                "quality_score": metrics.reasoning_metrics.reasoning_quality_score,
-                "has_explicit_reasoning": metrics.reasoning_metrics.has_explicit_reasoning,
-                "mentions_issue_keywords": metrics.reasoning_metrics.mentions_issue_keywords,
-                "mentions_relevant_files": metrics.reasoning_metrics.mentions_relevant_files,
-                "hypothesizes_before_acting": metrics.reasoning_metrics.hypothesizes_before_acting,
-                "explains_changes": metrics.reasoning_metrics.explains_changes,
-                "verifies_after_change": metrics.reasoning_metrics.verifies_after_change,
-                "issue_keyword_matches": metrics.reasoning_metrics.issue_keyword_matches,
-            },
-            "phases": {
-                "exploration_steps": metrics.phase_metrics.exploration_steps,
-                "implementation_steps": metrics.phase_metrics.implementation_steps,
-                "verification_steps": metrics.phase_metrics.verification_steps,
-                "exploration_pct": metrics.phase_metrics.exploration_pct,
-                "phase_transitions": metrics.phase_metrics.phase_transitions,
-                "followed_read_before_write": metrics.phase_metrics.followed_read_before_write,
-                "followed_test_after_change": metrics.phase_metrics.followed_test_after_change,
-            },
-            "exploration": {
-                "strategy": metrics.exploration_metrics.exploration_strategy,
-                "files_explored": metrics.exploration_metrics.files_explored,
-                "directories_explored": metrics.exploration_metrics.directories_explored,
-                "relevant_file_discovery_step": metrics.exploration_metrics.relevant_file_discovery_step,
-                "exploration_efficiency": metrics.exploration_metrics.exploration_efficiency,
-                "wasted_explorations": metrics.exploration_metrics.wasted_explorations,
-            },
-            "trajectory": {
-                "length": metrics.trajectory_metrics.trajectory_length,
-                "optimal_length": metrics.trajectory_metrics.optimal_length,
-                "efficiency": metrics.trajectory_metrics.trajectory_efficiency,
-                "unnecessary_steps": len(metrics.trajectory_metrics.unnecessary_steps),
-                "agent_trajectory": metrics.trajectory_metrics.agent_trajectory,
-            },
-            "convergence": {
-                "final_similarity": metrics.convergence_metrics.final_similarity,
-                "max_progress": metrics.convergence_metrics.max_progress,
-                "converged": metrics.convergence_metrics.converged,
-                "monotonic_progress": metrics.convergence_metrics.monotonic_progress,
-                "had_regression": metrics.convergence_metrics.had_regression,
-                "progress_volatility": metrics.convergence_metrics.progress_volatility,
-                "progress_curve": metrics.convergence_metrics.progress_curve,
-            },
-            "error_recovery": {
-                "total_errors": metrics.error_recovery_metrics.total_errors,
-                "recovered_errors": metrics.error_recovery_metrics.recovered_errors,
-                "recovery_rate": metrics.error_recovery_metrics.recovery_rate,
-                "max_repetition": metrics.error_recovery_metrics.max_repetition,
-                "stuck_episodes": len(metrics.error_recovery_metrics.stuck_episodes),
-                "max_stuck_duration": metrics.error_recovery_metrics.max_stuck_duration,
-            },
-            "failure_analysis": {
-                "hit_max_steps": metrics.failure_analysis.hit_max_steps,
-                "agent_submitted": metrics.failure_analysis.agent_submitted,
-                "primary_failure_mode": metrics.failure_analysis.primary_failure_mode,
-                "failure_modes": metrics.failure_analysis.failure_modes,
-                "no_changes_made": metrics.failure_analysis.no_changes_made,
-                "wrong_files_modified": metrics.failure_analysis.wrong_files_modified,
-                "patch_too_large": metrics.failure_analysis.patch_too_large,
-                "tool_errors_occurred": metrics.failure_analysis.tool_errors_occurred,
-                "model_got_stuck": metrics.failure_analysis.model_got_stuck,
-                "failure_reasons": metrics.failure_analysis.failure_reasons,
-            },
+        result["metrics"]["core"] = {
+            "similarity_score": metrics.patch_quality.similarity_score,
+            "reasoning_score": metrics.reasoning_metrics.reasoning_quality_score,
+            "exploration_efficiency": metrics.exploration_metrics.exploration_efficiency,
+            "trajectory_efficiency": metrics.trajectory_metrics.trajectory_efficiency,
+            "primary_failure_mode": metrics.failure_analysis.primary_failure_mode,
+            "failure_reasons": metrics.failure_analysis.failure_reasons,
         }
+        
+        # Add detailed metrics only if requested
+        if detailed_metrics:
+            result["metrics"]["detailed"] = {
+                "tool_usage": {
+                    "total_calls": metrics.tool_usage.total_calls,
+                    "calls_by_tool": metrics.tool_usage.calls_by_tool,
+                    "tool_sequence": metrics.tool_usage.tool_sequence,
+                    "read_relevant_files": metrics.tool_usage.read_relevant_files,
+                    "used_str_replace": metrics.tool_usage.used_str_replace,
+                    "used_write_file": metrics.tool_usage.used_write_file,
+                    "ran_tests": metrics.tool_usage.ran_tests,
+                    "submitted": metrics.tool_usage.submitted,
+                    "tool_errors": metrics.tool_usage.tool_errors,
+                },
+                "patch_quality": {
+                    "files_changed": metrics.patch_quality.files_changed,
+                    "gold_files_touched": metrics.patch_quality.gold_files_touched,
+                    "correct_files_touched": metrics.patch_quality.correct_files_touched,
+                    "extra_files_touched": metrics.patch_quality.extra_files_touched,
+                    "missing_files": metrics.patch_quality.missing_files,
+                    "lines_added": metrics.patch_quality.lines_added,
+                    "lines_removed": metrics.patch_quality.lines_removed,
+                    "line_level_similarity": metrics.patch_quality.line_level_similarity,
+                    "patch_too_large": metrics.patch_quality.patch_too_large,
+                },
+                "reasoning": {
+                    "has_explicit_reasoning": metrics.reasoning_metrics.has_explicit_reasoning,
+                    "mentions_issue_keywords": metrics.reasoning_metrics.mentions_issue_keywords,
+                    "mentions_relevant_files": metrics.reasoning_metrics.mentions_relevant_files,
+                    "hypothesizes_before_acting": metrics.reasoning_metrics.hypothesizes_before_acting,
+                    "explains_changes": metrics.reasoning_metrics.explains_changes,
+                    "verifies_after_change": metrics.reasoning_metrics.verifies_after_change,
+                    "issue_keyword_matches": metrics.reasoning_metrics.issue_keyword_matches,
+                },
+                "phases": {
+                    "exploration_steps": metrics.phase_metrics.exploration_steps,
+                    "implementation_steps": metrics.phase_metrics.implementation_steps,
+                    "verification_steps": metrics.phase_metrics.verification_steps,
+                    "exploration_pct": metrics.phase_metrics.exploration_pct,
+                    "phase_transitions": metrics.phase_metrics.phase_transitions,
+                    "followed_read_before_write": metrics.phase_metrics.followed_read_before_write,
+                    "followed_test_after_change": metrics.phase_metrics.followed_test_after_change,
+                },
+                "exploration": {
+                    "strategy": metrics.exploration_metrics.exploration_strategy,
+                    "files_explored": metrics.exploration_metrics.files_explored,
+                    "directories_explored": metrics.exploration_metrics.directories_explored,
+                    "relevant_file_discovery_step": metrics.exploration_metrics.relevant_file_discovery_step,
+                    "wasted_explorations": metrics.exploration_metrics.wasted_explorations,
+                },
+                "trajectory": {
+                    "length": metrics.trajectory_metrics.trajectory_length,
+                    "optimal_length": metrics.trajectory_metrics.optimal_length,
+                    "unnecessary_steps": len(metrics.trajectory_metrics.unnecessary_steps),
+                    "agent_trajectory": metrics.trajectory_metrics.agent_trajectory,
+                },
+                "convergence": {
+                    "final_similarity": metrics.convergence_metrics.final_similarity,
+                    "max_progress": metrics.convergence_metrics.max_progress,
+                    "converged": metrics.convergence_metrics.converged,
+                    "monotonic_progress": metrics.convergence_metrics.monotonic_progress,
+                    "had_regression": metrics.convergence_metrics.had_regression,
+                    "progress_volatility": metrics.convergence_metrics.progress_volatility,
+                    "progress_curve": metrics.convergence_metrics.progress_curve,
+                },
+                "error_recovery": {
+                    "total_errors": metrics.error_recovery_metrics.total_errors,
+                    "recovered_errors": metrics.error_recovery_metrics.recovered_errors,
+                    "recovery_rate": metrics.error_recovery_metrics.recovery_rate,
+                    "max_repetition": metrics.error_recovery_metrics.max_repetition,
+                    "stuck_episodes": len(metrics.error_recovery_metrics.stuck_episodes),
+                    "max_stuck_duration": metrics.error_recovery_metrics.max_stuck_duration,
+                },
+                "failure_analysis": {
+                    "hit_max_steps": metrics.failure_analysis.hit_max_steps,
+                    "agent_submitted": metrics.failure_analysis.agent_submitted,
+                    "failure_modes": metrics.failure_analysis.failure_modes,
+                    "no_changes_made": metrics.failure_analysis.no_changes_made,
+                    "wrong_files_modified": metrics.failure_analysis.wrong_files_modified,
+                    "patch_too_large": metrics.failure_analysis.patch_too_large,
+                    "tool_errors_occurred": metrics.failure_analysis.tool_errors_occurred,
+                    "model_got_stuck": metrics.failure_analysis.model_got_stuck,
+                },
+            }
     
     # Save to file
     model_safe = (model or "default").replace("/", "-")
@@ -673,6 +680,11 @@ def main():
         default="first",
         help="Sampling strategy (default: first)",
     )
+    parser.add_argument(
+        "--detailed-metrics",
+        action="store_true",
+        help="Compute and save additional detailed metrics",
+    )
     
     args = parser.parse_args()
     
@@ -751,6 +763,7 @@ def main():
             model=args.model or "default",
             max_steps=args.max_steps,
             output_dir=args.output,
+            detailed_metrics=args.detailed_metrics,
         )
     
     # Output JSON for benchmark script
