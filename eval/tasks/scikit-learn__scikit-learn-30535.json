@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-30535",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "b1804eec46733e85d575b06e915a3b451cbacf22",
+  "issue_number": 30040,
+  "issue_title": "Fix `LinearRegression`'s numerical stability on rank deficient data by setting the `cond` parameter in the call to `scipy.linalg.lstsq`",
+  "issue_body": "#### Reference Issues/PRs\r\n\r\nSame as #30030 but keeping `scipy.linalg.lstsq` solver.\r\n\r\n#29818 and #26164 revealed that LinearRegression was failing the sample weight consistency check (using weights should be equivalent to removing/repeating samples).\r\n\r\nRelated to #22947 #25948\r\n\r\n#### What does this implement/fix? Explain your changes.\r\nThe `scipy.linalg.lstsq` solver can fail the sample weight consistency test, especially for wide dataset (`n_features > n_samples`) after centering `X,y` (as done when `fit_intercept=True`). \r\n\r\nSetting the `cond` parameter (cut-off ratio on singular values) to the value recommended by `numpy.linalg.lstsq` documentation seems to fix the bug.\r\n",
+  "pr_number": 30535,
+  "pr_title": "TST remove `xfail` marker for `check_sample_weight_equivalence_on_dense_data` and `LinearRegression`",
+  "gold_patch": "diff --git a/sklearn/utils/_test_common/instance_generator.py b/sklearn/utils/_test_common/instance_generator.py\nindex 49422947a0fe7..459112328994d 100644\n--- a/sklearn/utils/_test_common/instance_generator.py\n+++ b/sklearn/utils/_test_common/instance_generator.py\n@@ -556,6 +556,12 @@\n         \"check_dict_unchanged\": dict(batch_size=10, max_iter=5, n_components=1)\n     },\n     LinearDiscriminantAnalysis: {\"check_dict_unchanged\": dict(n_components=1)},\n+    LinearRegression: {\n+        \"check_sample_weight_equivalence_on_dense_data\": [\n+            dict(positive=False),\n+            dict(positive=True),\n+        ]\n+    },\n     LocallyLinearEmbedding: {\"check_dict_unchanged\": dict(max_iter=5, n_components=1)},\n     LogisticRegression: {\n         \"check_sample_weight_equivalence_on_dense_data\": [\n@@ -964,16 +970,13 @@ def _yield_instances_for_check(check, estimator_orig):\n         \"check_methods_sample_order_invariance\": \"check is not applicable.\"\n     },\n     LinearRegression: {\n-        # TODO: investigate failure see meta-issue #16298\n-        #\n-        # Note: this model should converge to the minimum norm solution of the\n+        # TODO: this model should converge to the minimum norm solution of the\n         # least squares problem and as result be numerically stable enough when\n         # running the equivalence check even if n_features > n_samples. Maybe\n         # this is is not the case and a different choice of solver could fix\n-        # this problem.\n-        \"check_sample_weight_equivalence_on_dense_data\": (\n-            \"sample_weight is not equivalent to removing/repeating samples.\"\n-        ),\n+        # this problem. This might require setting a low enough value for the\n+        # tolerance of the lsqr solver:\n+        # https://github.com/scikit-learn/scikit-learn/issues/30131\n         \"check_sample_weight_equivalence_on_sparse_data\": (\n             \"sample_weight is not equivalent to removing/repeating samples.\"\n         ),\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/_test_common/instance_generator.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2024-12-23T17:10:38Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/30535",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/30040"
+}

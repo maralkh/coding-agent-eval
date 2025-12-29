@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-31434",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "4dce710562a7b1ee5387b4e1f2bda29f847935fd",
+  "issue_number": 31429,
+  "issue_title": ":lock: :robot: CI Update lock files for main CI build(s) :lock: :robot:",
+  "issue_body": "Update lock files.\n\n### Note\nIf the CI tasks fail, create a new branch based on this PR and add the required fixes to that branch.",
+  "pr_number": 31434,
+  "pr_title": "FIX random failure in `test_solver_consistency` with SAG/SAGA solvers ",
+  "gold_patch": "diff --git a/sklearn/linear_model/tests/test_ridge.py b/sklearn/linear_model/tests/test_ridge.py\nindex 60b8a8bb3e144..24515195fb7cc 100644\n--- a/sklearn/linear_model/tests/test_ridge.py\n+++ b/sklearn/linear_model/tests/test_ridge.py\n@@ -750,9 +750,8 @@ def _make_sparse_offset_regression(\n     \"n_samples,dtype,proportion_nonzero\",\n     [(20, \"float32\", 0.1), (40, \"float32\", 1.0), (20, \"float64\", 0.2)],\n )\n-@pytest.mark.parametrize(\"seed\", np.arange(3))\n def test_solver_consistency(\n-    solver, proportion_nonzero, n_samples, dtype, sparse_container, seed\n+    solver, proportion_nonzero, n_samples, dtype, sparse_container, global_random_seed\n ):\n     alpha = 1.0\n     noise = 50.0 if proportion_nonzero > 0.9 else 500.0\n@@ -761,10 +760,9 @@ def test_solver_consistency(\n         n_features=30,\n         proportion_nonzero=proportion_nonzero,\n         noise=noise,\n-        random_state=seed,\n+        random_state=global_random_seed,\n         n_samples=n_samples,\n     )\n-\n     # Manually scale the data to avoid pathological cases. We use\n     # minmax_scale to deal with the sparse case without breaking\n     # the sparsity pattern.\n@@ -778,7 +776,21 @@ def test_solver_consistency(\n     if solver == \"ridgecv\":\n         ridge = RidgeCV(alphas=[alpha])\n     else:\n-        ridge = Ridge(solver=solver, tol=1e-10, alpha=alpha)\n+        if solver.startswith(\"sag\"):\n+            # Avoid ConvergenceWarning for sag and saga solvers.\n+            tol = 1e-7\n+            max_iter = 100_000\n+        else:\n+            tol = 1e-10\n+            max_iter = None\n+\n+        ridge = Ridge(\n+            alpha=alpha,\n+            solver=solver,\n+            max_iter=max_iter,\n+            tol=tol,\n+            random_state=global_random_seed,\n+        )\n     ridge.fit(X, y)\n     assert_allclose(ridge.coef_, svd_ridge.coef_, atol=1e-3, rtol=1e-3)\n     assert_allclose(ridge.intercept_, svd_ridge.intercept_, atol=1e-3, rtol=1e-3)\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/linear_model/tests/test_ridge.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-05-27T09:05:51Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31434",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/31429"
+}

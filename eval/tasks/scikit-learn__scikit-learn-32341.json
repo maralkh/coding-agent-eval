@@ -1,0 +1,24 @@
+{
+  "id": "scikit-learn__scikit-learn-32341",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "a4aa832cfc504f61be1dc0666b8f8596c0a7778a",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 32341,
+  "pr_title": "FIX: handling pandas missing values in HTML repr ",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.base/32341.fix.rst b/doc/whats_new/upcoming_changes/sklearn.base/32341.fix.rst\nnew file mode 100644\nindex 0000000000000..d5437f8273d37\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.base/32341.fix.rst\n@@ -0,0 +1,2 @@\n+- Fixed the handling of pandas missing values in HTML display of all estimators.\n+  By :user: `Dea Mar\u00eda L\u00e9on <deamarialeon>`.\ndiff --git a/sklearn/base.py b/sklearn/base.py\nindex 4911e1dd8edd4..65b7edcc7d499 100644\n--- a/sklearn/base.py\n+++ b/sklearn/base.py\n@@ -17,7 +17,7 @@\n from sklearn._config import config_context, get_config\n from sklearn.exceptions import InconsistentVersionWarning\n from sklearn.utils._metadata_requests import _MetadataRequester, _routing_enabled\n-from sklearn.utils._missing import is_scalar_nan\n+from sklearn.utils._missing import is_pandas_na, is_scalar_nan\n from sklearn.utils._param_validation import validate_parameter_constraints\n from sklearn.utils._repr_html.base import ReprHTMLMixin, _HTMLDocumentationLinkMixin\n from sklearn.utils._repr_html.estimator import estimator_html_repr\n@@ -304,6 +304,10 @@ def is_non_default(param_name, param_value):\n                 init_default_params[param_name]\n             ):\n                 return True\n+            if is_pandas_na(param_value) and not is_pandas_na(\n+                init_default_params[param_name]\n+            ):\n+                return True\n             if not np.array_equal(\n                 param_value, init_default_params[param_name]\n             ) and not (\ndiff --git a/sklearn/tests/test_base.py b/sklearn/tests/test_base.py\nindex 97a14f6a9ca34..7fbcae4691fbf 100644\n--- a/sklearn/tests/test_base.py\n+++ b/sklearn/tests/test_base.py\n@@ -1037,6 +1037,19 @@ def test_param_is_non_default(default_value, test_value):\n     assert \"param\" in non_default\n \n \n+def test_param_is_non_default_when_pandas_NA():\n+    \"\"\"Check that we detect pandas.Na as non-default parameter.\n+\n+    Non-regression test for:\n+    https://github.com/scikit-learn/scikit-learn/issues/32312\n+    \"\"\"\n+    pd = pytest.importorskip(\"pandas\")\n+\n+    estimator = make_estimator_with_param(default_value=0)(param=pd.NA)\n+    non_default = estimator._get_params_html().non_default\n+    assert \"param\" in non_default\n+\n+\n @pytest.mark.parametrize(\n     \"default_value, test_value\",\n     [\ndiff --git a/sklearn/utils/_missing.py b/sklearn/utils/_missing.py\nindex daeb9ba68cc1c..5744a5b313d3e 100644\n--- a/sklearn/utils/_missing.py\n+++ b/sklearn/utils/_missing.py\n@@ -55,10 +55,12 @@ def is_pandas_na(x):\n     Parameters\n     ----------\n     x : any type\n+        The input value to test.\n \n     Returns\n     -------\n     boolean\n+        True if `x` is `pandas.NA`, False otherwise.\n     \"\"\"\n     with suppress(ImportError):\n         from pandas import NA\n",
+  "fail_to_pass": [
+    "test_param_is_non_default_when_pandas_NA"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/base.py",
+    "sklearn/tests/test_base.py",
+    "sklearn/utils/_missing.py"
+  ],
+  "difficulty": "hard",
+  "created_at": "2025-10-02T13:50:45Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32341",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

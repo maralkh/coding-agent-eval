@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-31957",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "28831879f2b5a8f623623735480399735c1bb742",
+  "issue_number": 31956,
+  "issue_title": "ENH speedup coordinate descent by avoiding calls to axpy in innermost loop",
+  "issue_body": "#### Reference Issues/PRs\r\nSimilar to #31880.\r\nContinues and fixes #15931.\r\n\r\n#### What does this implement/fix? Explain your changes.\r\nThis PR avoids calls to `_axpy` in the innermost loop of all coordinate descent solvers (Lasso and Enet), except `enet_coordinate_descent_gram` which was done in #31880.\r\n\r\n#### Any other comments?\r\nIronically, this improvement also reduces code size \ud83d\ude04 \r\n\r\nFor reviewers: better merge #31957 first.\r\n",
+  "pr_number": 31957,
+  "pr_title": "TST add test_multi_task_lasso_vs_skglm",
+  "gold_patch": "diff --git a/sklearn/linear_model/_cd_fast.pyx b/sklearn/linear_model/_cd_fast.pyx\nindex 422da51c21d88..24f69c25e143c 100644\n--- a/sklearn/linear_model/_cd_fast.pyx\n+++ b/sklearn/linear_model/_cd_fast.pyx\n@@ -786,6 +786,12 @@ def enet_coordinate_descent_multi_task(\n \n         0.5 * norm(Y - X W.T, 2)^2 + l1_reg ||W.T||_21 + 0.5 * l2_reg norm(W.T, 2)^2\n \n+    The algorithm follows\n+    Noah Simon, Jerome Friedman, Trevor Hastie. 2013.\n+    A Blockwise Descent Algorithm for Group-penalized Multiresponse and Multinomial\n+    Regression\n+    https://doi.org/10.48550/arXiv.1311.6529\n+\n     Returns\n     -------\n     W : ndarray of shape (n_tasks, n_features)\ndiff --git a/sklearn/linear_model/tests/test_coordinate_descent.py b/sklearn/linear_model/tests/test_coordinate_descent.py\nindex 5a152a6abd3f6..2af8866cdacfa 100644\n--- a/sklearn/linear_model/tests/test_coordinate_descent.py\n+++ b/sklearn/linear_model/tests/test_coordinate_descent.py\n@@ -510,6 +510,46 @@ def test_uniform_targets():\n             assert_array_equal(model.alphas_, [np.finfo(float).resolution] * 3)\n \n \n+@pytest.mark.filterwarnings(\"error::sklearn.exceptions.ConvergenceWarning\")\n+def test_multi_task_lasso_vs_skglm():\n+    \"\"\"Test that MultiTaskLasso gives same results as the one from skglm.\n+\n+    To reproduce numbers, just use\n+    from skglm import MultiTaskLasso\n+    \"\"\"\n+    # Numbers are with skglm version 0.5.\n+    n_samples, n_features, n_tasks = 5, 4, 3\n+    X = np.vander(np.arange(n_samples), n_features)\n+    Y = np.arange(n_samples * n_tasks).reshape(n_samples, n_tasks)\n+\n+    def obj(W, X, y, alpha):\n+        intercept = W[:, -1]\n+        W = W[:, :-1]\n+        l21_norm = np.sqrt(np.sum(W**2, axis=0)).sum()\n+        return (\n+            np.linalg.norm(Y - X @ W.T - intercept, ord=\"fro\") ** 2 / (2 * n_samples)\n+            + alpha * l21_norm\n+        )\n+\n+    alpha = 0.1\n+    # TODO: The high number of iterations are required for convergence and show room\n+    # for improvement of the CD algorithm.\n+    m = MultiTaskLasso(alpha=alpha, tol=1e-10, max_iter=5000).fit(X, Y)\n+    assert_allclose(\n+        obj(np.c_[m.coef_, m.intercept_], X, Y, alpha=alpha),\n+        0.4965993692547902,\n+        rtol=1e-10,\n+    )\n+    assert_allclose(\n+        m.intercept_, [0.219942959407, 1.219942959407, 2.219942959407], rtol=1e-7\n+    )\n+    assert_allclose(\n+        m.coef_,\n+        np.tile([-0.032075014794, 0.25430904614, 2.44785152982, 0], (n_tasks, 1)),\n+        rtol=1e-6,\n+    )\n+\n+\n def test_multi_task_lasso_and_enet():\n     X, y, X_test, y_test = build_dataset()\n     Y = np.c_[y, y]\n",
+  "fail_to_pass": [
+    "test_multi_task_lasso_vs_skglm"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/linear_model/tests/test_coordinate_descent.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-08-16T12:58:05Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31957",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/31956"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "scikit-learn__scikit-learn-30898",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "ada9947d22b2e96c63a62d071e81b6fc048dbe02",
+  "issue_number": 30874,
+  "issue_title": "Make FrozenEstimator explicitly accept and ignore sample_weight",
+  "issue_body": "This is in particular necessary to avoid spurious warnings as triggered in https://github.com/scikit-learn/scikit-learn/pull/30873/files#r1965699574.",
+  "pr_number": 30898,
+  "pr_title": "Revert \"Make FrozenEstimator explicitly accept and ignore sample_weight\"",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.frozen/30874.enhancement.rst b/doc/whats_new/upcoming_changes/sklearn.frozen/30874.enhancement.rst\ndeleted file mode 100644\nindex 884958458c29e..0000000000000\n--- a/doc/whats_new/upcoming_changes/sklearn.frozen/30874.enhancement.rst\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-- :class:`~frozen.FrozenEstimator` now explicitly accepts a `sample_weight`\n-  argument in `fit` (and ignores it explicitly) to make it inspectable by\n-  meta-estimators and testing frameworks. By :user:`Olivier Grisel <ogrisel>`\ndiff --git a/sklearn/frozen/_frozen.py b/sklearn/frozen/_frozen.py\nindex e6221a8b20d1a..7585ea2597b59 100644\n--- a/sklearn/frozen/_frozen.py\n+++ b/sklearn/frozen/_frozen.py\n@@ -86,7 +86,7 @@ def __sklearn_is_fitted__(self):\n         except NotFittedError:\n             return False\n \n-    def fit(self, X, y, sample_weight=None, *args, **kwargs):\n+    def fit(self, X, y, *args, **kwargs):\n         \"\"\"No-op.\n \n         As a frozen estimator, calling `fit` has no effect.\n@@ -99,9 +99,6 @@ def fit(self, X, y, sample_weight=None, *args, **kwargs):\n         y : object\n             Ignored.\n \n-        sample_weight : object\n-            Ignored.\n-\n         *args : tuple\n             Additional positional arguments. Ignored, but present for API compatibility\n             with `self.estimator`.\ndiff --git a/sklearn/frozen/tests/test_frozen.py b/sklearn/frozen/tests/test_frozen.py\nindex 8874aa0a82dfc..b304d3ac0aa2c 100644\n--- a/sklearn/frozen/tests/test_frozen.py\n+++ b/sklearn/frozen/tests/test_frozen.py\n@@ -26,7 +26,7 @@\n from sklearn.pipeline import make_pipeline\n from sklearn.preprocessing import RobustScaler, StandardScaler\n from sklearn.utils._testing import set_random_state\n-from sklearn.utils.validation import check_is_fitted, has_fit_parameter\n+from sklearn.utils.validation import check_is_fitted\n \n \n @pytest.fixture\n@@ -221,16 +221,3 @@ def test_frozen_params():\n     other_est = LocalOutlierFactor()\n     frozen.set_params(estimator=other_est)\n     assert frozen.get_params() == {\"estimator\": other_est}\n-\n-\n-def test_frozen_ignores_sample_weight(regression_dataset):\n-    X, y = regression_dataset\n-    estimator = LinearRegression().fit(X, y)\n-    frozen = FrozenEstimator(estimator)\n-\n-    # Should not raise: sample_weight is just ignored as it is not used.\n-    frozen.fit(X, y, sample_weight=np.ones(len(y)))\n-\n-    # FrozenEstimator should have sample_weight in its signature to make it\n-    # explicit that sample_weight is accepted and ignored intentionally.\n-    assert has_fit_parameter(frozen, \"sample_weight\")\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/frozen/_frozen.py",
+    "sklearn/frozen/tests/test_frozen.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-02-25T13:41:41Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/30898",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/30874"
+}

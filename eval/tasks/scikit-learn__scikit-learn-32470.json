@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-32470",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "fad0826be6af1dd301b1f20629a943259517b94d",
+  "issue_number": 32288,
+  "issue_title": "[WIP] PERF Optimize weighted percentile (from n log n to n)",
+  "issue_body": "# WIP\r\n\r\n#### Reference Issues/PRs\r\n\r\nFollow-up from the proof section of this PR: https://github.com/scikit-learn/scikit-learn/pull/32285\r\n\r\n#### What does this implement/fix? Explain your changes.\r\n\r\nThe algorithm implemented here is basically the one described here: [Find a weighted median for unsorted array in linear time](https://cs.stackexchange.com/questions/56299/find-a-weighted-median-for-unsorted-array-in-linear-time) adapted to handle several quantiles in the same recursive call.\r\n\r\nComplexity is O(n) for one quantile, and approaches O(n log n) for many quantiles (in practice, 10 seems to be many already).\r\n\r\n#### Benchmarks\r\n\r\nIn numpy:\r\nFor one quantile, it's ~3x faster than the unstable-sort version of the current code.\r\nThe current code doesn't handle multiple quantiles, so you have to loop on each quantile, which is much slower than my function that compute the 10 deciles in less time than computing one quantile with the current code.\r\n\r\n",
+  "pr_number": 32470,
+  "pr_title": "MAINT remove XFAIL marker in `test_weighted_percentile_array_api_consistency` for array-api-strict",
+  "gold_patch": "diff --git a/sklearn/utils/tests/test_stats.py b/sklearn/utils/tests/test_stats.py\nindex 6cc6505fecbf6..9dbbcc4f5e35b 100644\n--- a/sklearn/utils/tests/test_stats.py\n+++ b/sklearn/utils/tests/test_stats.py\n@@ -242,19 +242,6 @@ def test_weighted_percentile_array_api_consistency(\n     global_random_seed, array_namespace, device, dtype_name, data, weights, percentile\n ):\n     \"\"\"Check `_weighted_percentile` gives consistent results with array API.\"\"\"\n-    if array_namespace == \"array_api_strict\":\n-        try:\n-            import array_api_strict\n-        except ImportError:\n-            pass\n-        else:\n-            if device == array_api_strict.Device(\"device1\"):\n-                # See https://github.com/data-apis/array-api-strict/issues/134\n-                pytest.xfail(\n-                    \"array_api_strict has bug when indexing with tuple of arrays \"\n-                    \"on non-'CPU_DEVICE' devices.\"\n-                )\n-\n     xp = _array_api_for_tests(array_namespace, device)\n \n     # Skip test for percentile=0 edge case (#20528) on namespace/device where\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/tests/test_stats.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-10-10T13:07:48Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32470",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/32288"
+}

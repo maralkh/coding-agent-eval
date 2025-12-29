@@ -1,0 +1,25 @@
+{
+  "id": "scikit-learn__scikit-learn-32657",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "04972ec5f05d8b0e20a0f990914c14bd638b8eef",
+  "issue_number": 30134,
+  "issue_title": "FEA add `confusion_matrix_at_thresholds`",
+  "issue_body": "<!--\r\nThanks for contributing a pull request! Please ensure you have taken a look at\r\nthe contribution guidelines: https://github.com/scikit-learn/scikit-learn/blob/main/CONTRIBUTING.md\r\n-->\r\n\r\n#### Reference Issues/PRs\r\n<!--\r\nExample: Fixes #1234. See also #3456.\r\nPlease use keywords (e.g., Fixes) to create link to the issues or pull requests\r\nyou resolved, so that they will automatically be closed when your pull request\r\nis merged. See https://github.com/blog/1506-closing-issues-via-pull-requests\r\n-->\r\n\r\n\r\n#### What does this implement/fix? Explain your changes.\r\nFixes #16470 \r\n\r\n#### Any other comments?\r\n* In `sklearn/metrics/_ranking.py`, changed the name of the function `_binary_clf_curve` to `binary_classifcation_curve` without changing the body. I also changed test functions like `test_binary_clf_curve_multiclass_error` without changing the body\r\n* `det_curve`, `roc_curve` and `precision_recall_curve` call this function, so I updated the name of the function in the body\r\n* I added examples in the docstring of the function\r\n\r\n<!--\r\nPlease be aware that we are a loose team of volunteers so patience is\r\nnecessary; assistance handling other issues is very welcome. We value\r\nall user contributions, no matter how minor they are. If we are slow to\r\nreview, either the pull request needs some benchmarking, tinkering,\r\nconvincing, etc. or more likely the reviewers are simply busy. In either\r\ncase, we ask for your understanding during the review process.\r\nFor more information, see our FAQ on this topic:\r\nhttps://scikit-learn.org/dev/faq.html#why-is-my-pull-request-not-getting-any-attention.\r\n\r\nThanks for contributing!\r\n-->\r\n",
+  "pr_number": 32657,
+  "pr_title": "MNT: Update test names to use `confusion_matrix_at_thresholds`",
+  "gold_patch": "diff --git a/sklearn/metrics/tests/test_ranking.py b/sklearn/metrics/tests/test_ranking.py\nindex 890ccc4e742a3..81d14b0265276 100644\n--- a/sklearn/metrics/tests/test_ranking.py\n+++ b/sklearn/metrics/tests/test_ranking.py\n@@ -860,7 +860,7 @@ def test_auc_score_non_binary_class():\n \n \n @pytest.mark.parametrize(\"curve_func\", CURVE_FUNCS)\n-def test_binary_clf_curve_multiclass_error(curve_func):\n+def test_confusion_matrix_at_thresholds_multiclass_error(curve_func):\n     rng = check_random_state(404)\n     y_true = rng.randint(0, 3, size=10)\n     y_pred = rng.rand(10)\n@@ -870,7 +870,7 @@ def test_binary_clf_curve_multiclass_error(curve_func):\n \n \n @pytest.mark.parametrize(\"curve_func\", CURVE_FUNCS)\n-def test_binary_clf_curve_implicit_pos_label(curve_func):\n+def test_confusion_matrix_at_thresholds_implicit_pos_label(curve_func):\n     # Check that using string class labels raises an informative\n     # error for any supported string dtype:\n     msg = (\n@@ -897,7 +897,9 @@ def test_binary_clf_curve_implicit_pos_label(curve_func):\n @pytest.mark.filterwarnings(\"ignore:Support for labels represented as bytes\")\n @pytest.mark.parametrize(\"curve_func\", [precision_recall_curve, roc_curve])\n @pytest.mark.parametrize(\"labels_type\", [\"list\", \"array\"])\n-def test_binary_clf_curve_implicit_bytes_pos_label(curve_func, labels_type):\n+def test_confusion_matrix_at_thresholds_implicit_bytes_pos_label(\n+    curve_func, labels_type\n+):\n     # Check that using bytes class labels raises an informative\n     # error for any supported string dtype:\n     labels = _convert_container([b\"a\", b\"b\"], labels_type)\n@@ -907,7 +909,7 @@ def test_binary_clf_curve_implicit_bytes_pos_label(curve_func, labels_type):\n \n \n @pytest.mark.parametrize(\"curve_func\", CURVE_FUNCS)\n-def test_binary_clf_curve_zero_sample_weight(curve_func):\n+def test_confusion_matrix_at_thresholds_zero_sample_weight(curve_func):\n     y_true = [0, 0, 1, 1, 1]\n     y_score = [0.1, 0.2, 0.3, 0.4, 0.5]\n     sample_weight = [1, 1, 1, 0.5, 0]\n",
+  "fail_to_pass": [
+    "test_confusion_matrix_at_thresholds_multiclass_error",
+    "test_confusion_matrix_at_thresholds_implicit_pos_label",
+    "test_confusion_matrix_at_thresholds_implicit_bytes_pos_label",
+    "test_confusion_matrix_at_thresholds_zero_sample_weight"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/metrics/tests/test_ranking.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-11-06T00:02:02Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32657",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/30134"
+}

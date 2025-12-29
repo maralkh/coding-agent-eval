@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-31301",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "b985df0a723d26ed9068bd28483fdd3858397e1f",
+  "issue_number": 31296,
+  "issue_title": ":lock: :robot: CI Update lock files for scipy-dev CI build(s) :lock: :robot:",
+  "issue_body": "Update lock files.\n\n### Note\nIf the CI tasks fail, create a new branch based on this PR and add the required fixes to that branch.",
+  "pr_number": 31301,
+  "pr_title": "Fix BLAS_Order.RowMajor import and similar in test_cython_blas with Cython 3.1",
+  "gold_patch": "diff --git a/sklearn/utils/tests/test_cython_blas.py b/sklearn/utils/tests/test_cython_blas.py\nindex e57bfc3ec5a9c..e221c3fea4e02 100644\n--- a/sklearn/utils/tests/test_cython_blas.py\n+++ b/sklearn/utils/tests/test_cython_blas.py\n@@ -2,10 +2,8 @@\n import pytest\n \n from sklearn.utils._cython_blas import (\n-    ColMajor,\n-    NoTrans,\n-    RowMajor,\n-    Trans,\n+    BLAS_Order,\n+    BLAS_Trans,\n     _asum_memview,\n     _axpy_memview,\n     _copy_memview,\n@@ -30,7 +28,7 @@ def _numpy_to_cython(dtype):\n \n \n RTOL = {np.float32: 1e-6, np.float64: 1e-12}\n-ORDER = {RowMajor: \"C\", ColMajor: \"F\"}\n+ORDER = {BLAS_Order.RowMajor: \"C\", BLAS_Order.ColMajor: \"F\"}\n \n \n def _no_op(x):\n@@ -166,9 +164,15 @@ def test_rot(dtype):\n \n @pytest.mark.parametrize(\"dtype\", [np.float32, np.float64])\n @pytest.mark.parametrize(\n-    \"opA, transA\", [(_no_op, NoTrans), (np.transpose, Trans)], ids=[\"NoTrans\", \"Trans\"]\n+    \"opA, transA\",\n+    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],\n+    ids=[\"NoTrans\", \"Trans\"],\n+)\n+@pytest.mark.parametrize(\n+    \"order\",\n+    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],\n+    ids=[\"RowMajor\", \"ColMajor\"],\n )\n-@pytest.mark.parametrize(\"order\", [RowMajor, ColMajor], ids=[\"RowMajor\", \"ColMajor\"])\n def test_gemv(dtype, opA, transA, order):\n     gemv = _gemv_memview[_numpy_to_cython(dtype)]\n \n@@ -187,7 +191,11 @@ def test_gemv(dtype, opA, transA, order):\n \n \n @pytest.mark.parametrize(\"dtype\", [np.float32, np.float64])\n-@pytest.mark.parametrize(\"order\", [RowMajor, ColMajor], ids=[\"RowMajor\", \"ColMajor\"])\n+@pytest.mark.parametrize(\n+    \"order\",\n+    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],\n+    ids=[\"BLAS_Order.RowMajor\", \"BLAS_Order.ColMajor\"],\n+)\n def test_ger(dtype, order):\n     ger = _ger_memview[_numpy_to_cython(dtype)]\n \n@@ -207,12 +215,20 @@ def test_ger(dtype, order):\n \n @pytest.mark.parametrize(\"dtype\", [np.float32, np.float64])\n @pytest.mark.parametrize(\n-    \"opB, transB\", [(_no_op, NoTrans), (np.transpose, Trans)], ids=[\"NoTrans\", \"Trans\"]\n+    \"opB, transB\",\n+    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],\n+    ids=[\"NoTrans\", \"Trans\"],\n+)\n+@pytest.mark.parametrize(\n+    \"opA, transA\",\n+    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],\n+    ids=[\"NoTrans\", \"Trans\"],\n )\n @pytest.mark.parametrize(\n-    \"opA, transA\", [(_no_op, NoTrans), (np.transpose, Trans)], ids=[\"NoTrans\", \"Trans\"]\n+    \"order\",\n+    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],\n+    ids=[\"BLAS_Order.RowMajor\", \"BLAS_Order.ColMajor\"],\n )\n-@pytest.mark.parametrize(\"order\", [RowMajor, ColMajor], ids=[\"RowMajor\", \"ColMajor\"])\n def test_gemm(dtype, opA, transA, opB, transB, order):\n     gemm = _gemm_memview[_numpy_to_cython(dtype)]\n \n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/tests/test_cython_blas.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-05-05T10:00:50Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31301",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/31296"
+}

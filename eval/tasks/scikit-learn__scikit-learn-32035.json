@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-32035",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "726ed184ed80b0191732baaaf5825b86b41db4d2",
+  "issue_number": 27846,
+  "issue_title": "\u26a0\ufe0f CI failed on Ubuntu_Atlas.ubuntu_atlas (last failure: Aug 28, 2025) \u26a0\ufe0f",
+  "issue_body": "**CI is still failing on [Ubuntu_Atlas.ubuntu_atlas](https://dev.azure.com/scikit-learn/scikit-learn/_build/results?buildId=79396&view=logs&j=689a1c8f-ff4e-5689-1a1a-6fa551ae9eba)** (Aug 28, 2025)\n- test_float_precision[33-MiniBatchKMeans-dense]",
+  "pr_number": 32035,
+  "pr_title": "TST fix platform sensitive test: [all random seeds] test_float_precision",
+  "gold_patch": "diff --git a/sklearn/cluster/tests/test_k_means.py b/sklearn/cluster/tests/test_k_means.py\nindex 8ca912a193c94..da1a2a0f13765 100644\n--- a/sklearn/cluster/tests/test_k_means.py\n+++ b/sklearn/cluster/tests/test_k_means.py\n@@ -7,6 +7,7 @@\n import numpy as np\n import pytest\n from scipy import sparse as sp\n+from threadpoolctl import threadpool_info\n \n from sklearn.base import clone\n from sklearn.cluster import KMeans, MiniBatchKMeans, k_means, kmeans_plusplus\n@@ -744,7 +745,7 @@ def test_transform(Estimator, global_random_seed):\n     # In particular, diagonal must be 0\n     assert_array_equal(Xt.diagonal(), np.zeros(n_clusters))\n \n-    # Transorfming X should return the pairwise distances between X and the\n+    # Transforming X should return the pairwise distances between X and the\n     # centers\n     Xt = km.transform(X)\n     assert_allclose(Xt, pairwise_distances(X, km.cluster_centers_))\n@@ -794,6 +795,13 @@ def test_k_means_function(global_random_seed):\n     ids=data_containers_ids,\n )\n @pytest.mark.parametrize(\"Estimator\", [KMeans, MiniBatchKMeans])\n+@pytest.mark.skipif(\n+    not any(i for i in threadpool_info() if i[\"user_api\"] == \"blas\"),\n+    reason=(\n+        \"Fails for some global_random_seed on Atlas which cannot be detected by \"\n+        \"threadpoolctl.\"\n+    ),\n+)\n def test_float_precision(Estimator, input_data, global_random_seed):\n     # Check that the results are the same for single and double precision.\n     km = Estimator(n_init=1, random_state=global_random_seed)\n@@ -822,10 +830,11 @@ def test_float_precision(Estimator, input_data, global_random_seed):\n \n     # compare arrays with low precision since the difference between 32 and\n     # 64 bit comes from an accumulation of rounding errors.\n-    assert_allclose(inertia[np.float32], inertia[np.float64], rtol=1e-4)\n-    assert_allclose(Xt[np.float32], Xt[np.float64], atol=Xt[np.float64].max() * 1e-4)\n+    rtol = 1e-4\n+    assert_allclose(inertia[np.float32], inertia[np.float64], rtol=rtol)\n+    assert_allclose(Xt[np.float32], Xt[np.float64], atol=Xt[np.float64].max() * rtol)\n     assert_allclose(\n-        centers[np.float32], centers[np.float64], atol=centers[np.float64].max() * 1e-4\n+        centers[np.float32], centers[np.float64], atol=centers[np.float64].max() * rtol\n     )\n     assert_array_equal(labels[np.float32], labels[np.float64])\n \n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/cluster/tests/test_k_means.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-08-28T10:23:03Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32035",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/27846"
+}

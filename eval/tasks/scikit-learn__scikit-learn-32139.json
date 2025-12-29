@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-32139",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "b84097bf8b5ead05c8801ea1e1be92a1aaadfb8b",
+  "issue_number": 32125,
+  "issue_title": "Tree module - Broken test: test fails when changing random_state=0 to =1",
+  "issue_body": "In the test `tree/tests/test_tree.py::test_regression_tree_missing_values_toy`, in this [line](https://github.com/scikit-learn/scikit-learn/blob/0033630cd35d5945ea8c1b5beff6efe9583cd523/sklearn/tree/tests/test_tree.py#L2695C1-L2696C1):\n\n```\n    tree = Tree(criterion=criterion, random_state=0).fit(X, y)\n```\n\nif you change `random_state=0` to `random_state=1` all the tests with `Tree` being `ExtraTreeRegressor` fails.\n\nIt is completly logical when you look at the code: when there are missing values the random split (which is what `ExtraTreeRegressor`  does) *randomly* put them to the left or the right. The *randomly* part here is not compatible the test logic. It's a lucky 1/16 chance in the choice of the random_seed that made this test passed until now (I ran the test with 1000 seeds, and it's indeed 1/16, because it's tested on 4 arrays, hence proba = 1/2^4).\n\nI'm willing to open a PR to fix this. My suggestion is to stop running this test on `ExtraTreeRegressor`, there are alreay many tests on `ExtraTreeRegressor`s and the issues linked in the docstring of this test aren't mentionning `ExtraTreeRegressor` anywhere.\n\n\n",
+  "pr_number": 32139,
+  "pr_title": "MNT - Tree module: Fix test that breaks when random_seed changed",
+  "gold_patch": "diff --git a/sklearn/tree/tests/test_tree.py b/sklearn/tree/tests/test_tree.py\nindex bd8325f6e9a55..f0bf3babc2020 100644\n--- a/sklearn/tree/tests/test_tree.py\n+++ b/sklearn/tree/tests/test_tree.py\n@@ -2675,7 +2675,7 @@ def test_deterministic_pickle():\n     ],\n )\n @pytest.mark.parametrize(\"criterion\", [\"squared_error\", \"friedman_mse\"])\n-def test_regression_tree_missing_values_toy(Tree, X, criterion):\n+def test_regression_tree_missing_values_toy(Tree, X, criterion, global_random_seed):\n     \"\"\"Check that we properly handle missing values in regression trees using a toy\n     dataset.\n \n@@ -2692,14 +2692,17 @@ def test_regression_tree_missing_values_toy(Tree, X, criterion):\n     X = X.reshape(-1, 1)\n     y = np.arange(6)\n \n-    tree = Tree(criterion=criterion, random_state=0).fit(X, y)\n+    tree = Tree(criterion=criterion, random_state=global_random_seed).fit(X, y)\n     tree_ref = clone(tree).fit(y.reshape(-1, 1), y)\n \n     impurity = tree.tree_.impurity\n     assert all(impurity >= 0), impurity.min()  # MSE should always be positive\n \n-    # Check the impurity match after the first split\n-    assert_allclose(tree.tree_.impurity[:2], tree_ref.tree_.impurity[:2])\n+    # Note: the impurity matches after the first split only on greedy trees\n+    # see https://github.com/scikit-learn/scikit-learn/issues/32125\n+    if Tree is DecisionTreeRegressor:\n+        # Check the impurity match after the first split\n+        assert_allclose(tree.tree_.impurity[:2], tree_ref.tree_.impurity[:2])\n \n     # Find the leaves with a single sample where the MSE should be 0\n     leaves_idx = np.flatnonzero(\n",
+  "fail_to_pass": [
+    "test_regression_tree_missing_values_toy"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/tree/tests/test_tree.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-09-09T15:14:56Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32139",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/32125"
+}

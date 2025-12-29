@@ -1,0 +1,21 @@
+{
+  "id": "scikit-learn__scikit-learn-31204",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "af7df5ced0eb1124df12dd389cc4ef7a9042837e",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31204,
+  "pr_title": "Add array api support for jaccard score",
+  "gold_patch": "diff --git a/doc/modules/array_api.rst b/doc/modules/array_api.rst\nindex b4940eccec2fc..adf463d437b99 100644\n--- a/doc/modules/array_api.rst\n+++ b/doc/modules/array_api.rst\n@@ -138,6 +138,7 @@ Metrics\n - :func:`sklearn.metrics.f1_score`\n - :func:`sklearn.metrics.fbeta_score`\n - :func:`sklearn.metrics.hamming_loss`\n+- :func:`sklearn.metrics.jaccard_score`\n - :func:`sklearn.metrics.max_error`\n - :func:`sklearn.metrics.mean_absolute_error`\n - :func:`sklearn.metrics.mean_absolute_percentage_error`\ndiff --git a/doc/whats_new/upcoming_changes/array-api/31204.feature.rst b/doc/whats_new/upcoming_changes/array-api/31204.feature.rst\nnew file mode 100644\nindex 0000000000000..e1e2bc61738ca\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/array-api/31204.feature.rst\n@@ -0,0 +1,2 @@\n+- :func:`sklearn.metrics.jaccard_score` now supports Array API compatible inputs.\n+  By :user:`Omar Salman <OmarManzoor>`\ndiff --git a/sklearn/metrics/_classification.py b/sklearn/metrics/_classification.py\nindex 13f2f5dc89208..74f5dbf88831d 100644\n--- a/sklearn/metrics/_classification.py\n+++ b/sklearn/metrics/_classification.py\n@@ -1073,9 +1073,10 @@ def jaccard_score(\n     numerator = MCM[:, 1, 1]\n     denominator = MCM[:, 1, 1] + MCM[:, 0, 1] + MCM[:, 1, 0]\n \n+    xp, _, device_ = get_namespace_and_device(y_true, y_pred)\n     if average == \"micro\":\n-        numerator = np.array([numerator.sum()])\n-        denominator = np.array([denominator.sum()])\n+        numerator = xp.asarray(xp.sum(numerator, keepdims=True), device=device_)\n+        denominator = xp.asarray(xp.sum(denominator, keepdims=True), device=device_)\n \n     jaccard = _prf_divide(\n         numerator,\n@@ -1090,14 +1091,14 @@ def jaccard_score(\n         return jaccard\n     if average == \"weighted\":\n         weights = MCM[:, 1, 0] + MCM[:, 1, 1]\n-        if not np.any(weights):\n+        if not xp.any(weights):\n             # numerator is 0, and warning should have already been issued\n             weights = None\n     elif average == \"samples\" and sample_weight is not None:\n         weights = sample_weight\n     else:\n         weights = None\n-    return float(np.average(jaccard, weights=weights))\n+    return float(_average(jaccard, weights=weights, xp=xp))\n \n \n @validate_params(\ndiff --git a/sklearn/metrics/tests/test_common.py b/sklearn/metrics/tests/test_common.py\nindex b31b186054e11..9fc08300fec12 100644\n--- a/sklearn/metrics/tests/test_common.py\n+++ b/sklearn/metrics/tests/test_common.py\n@@ -2147,6 +2147,11 @@ def check_array_api_metric_pairwise(metric, array_namespace, device, dtype_name)\n         check_array_api_multiclass_classification_metric,\n         check_array_api_multilabel_classification_metric,\n     ],\n+    jaccard_score: [\n+        check_array_api_binary_classification_metric,\n+        check_array_api_multiclass_classification_metric,\n+        check_array_api_multilabel_classification_metric,\n+    ],\n     multilabel_confusion_matrix: [\n         check_array_api_binary_classification_metric,\n         check_array_api_multiclass_classification_metric,\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/metrics/_classification.py",
+    "sklearn/metrics/tests/test_common.py"
+  ],
+  "difficulty": "hard",
+  "created_at": "2025-04-15T06:49:59Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31204",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "scikit-learn__scikit-learn-31650",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "bd60ea7219defd223d26173637984a52c0734536",
+  "issue_number": 27098,
+  "issue_title": "Add `mps` device in Array API tests",
+  "issue_body": "(PR part of the Sprint at EuroSciPy 2023)\r\n\r\nWhile trying to contribute to the  #22352 effort, I have realised that the `mps` device (the GPU device name in PyTorch for Mac with M1/M2) was not part of the Array API tests. I added this here.\r\nThanks to @ogrisel for the help with this :)\r\n",
+  "pr_number": 31650,
+  "pr_title": "feat: support Intel GPUs in Array API testing",
+  "gold_patch": "diff --git a/sklearn/utils/_array_api.py b/sklearn/utils/_array_api.py\nindex 82a9d5b272c0f..454ab571c2131 100644\n--- a/sklearn/utils/_array_api.py\n+++ b/sklearn/utils/_array_api.py\n@@ -86,7 +86,7 @@ def yield_namespace_device_dtype_combinations(include_numpy_namespaces=True):\n     ):\n         if array_namespace == \"torch\":\n             for device, dtype in itertools.product(\n-                (\"cpu\", \"cuda\"), (\"float64\", \"float32\")\n+                (\"cpu\", \"cuda\", \"xpu\"), (\"float64\", \"float32\")\n             ):\n                 yield array_namespace, device, dtype\n             yield array_namespace, \"mps\", \"float32\"\ndiff --git a/sklearn/utils/_testing.py b/sklearn/utils/_testing.py\nindex 6582bb763641e..03bd57b987c01 100644\n--- a/sklearn/utils/_testing.py\n+++ b/sklearn/utils/_testing.py\n@@ -1343,6 +1343,17 @@ def _array_api_for_tests(array_namespace, device):\n                 \"MPS is not available because the current PyTorch install was not \"\n                 \"built with MPS enabled.\"\n             )\n+    elif array_namespace == \"torch\" and device == \"xpu\":  # pragma: nocover\n+        if not hasattr(xp, \"xpu\"):\n+            # skip xpu testing for PyTorch <2.4\n+            raise SkipTest(\n+                \"XPU is not available because the current PyTorch install was not \"\n+                \"built with XPU support.\"\n+            )\n+        if not xp.xpu.is_available():\n+            raise SkipTest(\n+                \"Skipping XPU device test because no XPU device is available\"\n+            )\n     elif array_namespace == \"cupy\":  # pragma: nocover\n         import cupy\n \n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/_array_api.py",
+    "sklearn/utils/_testing.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-06-25T00:36:06Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31650",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/27098"
+}

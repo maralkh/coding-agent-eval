@@ -1,0 +1,26 @@
+{
+  "id": "scikit-learn__scikit-learn-28280",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "1e8a5b833d1b58f3ab84099c4582239af854b23a",
+  "issue_number": 28248,
+  "issue_title": "BUG metrics/pairwise.py::cosine_similarity returns wrong results on float32 array",
+  "issue_body": "### Describe the bug\n\nThe function `sklearn.metrics.pairwise.cosine_similarity` yields wrong results on float32 arrays.\n\n### Steps/Code to Reproduce\n\n```python\nimport numpy as np\nfrom sklearn.metrics.pairwise import cosine_similarity\n\nrng = np.random.RandomState(42)\nX = rng.random((2, 10)).astype(np.float32)\nprint(cosine_similarity(X))\nprint(cosine_similarity(X.astype(np.float64)))\n```\n\n### Expected Results\n\nBoth should return the same result (within floating point tolerance).\n\n### Actual Results\n\nfloat32:\n```\n[[0.99999994 0.8140992 ]\n [0.8140992  0.99999994]]\n```\n\nfloat64:\n```\n[[1.         0.81409924]\n [0.81409924 1.        ]]\n```\n\nThe diagonal should be exactly 1.0 for cosine_similarity.\n\n### Versions\n\nSystem: Linux\nPython: 3.11.4\nscikit-learn: 1.3.0\nnumpy: 1.25.2\nscipy: 1.11.2",
+  "pr_number": 28280,
+  "pr_title": "FIX Ensure cosine_similarity diagonal is 1.0 for float32",
+  "gold_patch": "diff --git a/sklearn/metrics/pairwise.py b/sklearn/metrics/pairwise.py\n--- a/sklearn/metrics/pairwise.py\n+++ b/sklearn/metrics/pairwise.py\n@@ -1293,6 +1293,10 @@ def cosine_similarity(X, Y=None, dense_output=True):\n     K = safe_sparse_dot(X_normalized, Y_normalized.T, dense_output=dense_output)\n \n+    # Ensure diagonal is exactly 1.0 when computing self-similarity\n+    if Y is None:\n+        np.fill_diagonal(K, 1.0)\n+\n     return K\n",
+  "fail_to_pass": [
+    "test_cosine_similarity_float32_diagonal"
+  ],
+  "pass_to_pass": [
+    "test_cosine_similarity",
+    "test_pairwise_distances"
+  ],
+  "relevant_files": [
+    "sklearn/metrics/pairwise.py",
+    "sklearn/metrics/tests/test_pairwise.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2024-01-15T10:30:00Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/28280",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/28248"
+}

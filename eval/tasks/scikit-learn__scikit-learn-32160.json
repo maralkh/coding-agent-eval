@@ -1,0 +1,21 @@
+{
+  "id": "scikit-learn__scikit-learn-32160",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "33060be706a3956f2dbe4d1eaf121ec4ca18ef51",
+  "issue_number": 29124,
+  "issue_title": "DEPR deprecate `copy` parameter in `Birch`",
+  "issue_body": "Closes #29092.\r\n\r\nThis PR deprecates the `copy` parameter in `Birch` since it has no effect and a copy will always be made regardless of this parameter. See the linked issue for more details.",
+  "pr_number": 32160,
+  "pr_title": "MNT Clean-up deprecation for 1.8: copy attribute of Birch",
+  "gold_patch": "diff --git a/sklearn/cluster/_birch.py b/sklearn/cluster/_birch.py\nindex fbec628e5f45c..11c91853544f3 100644\n--- a/sklearn/cluster/_birch.py\n+++ b/sklearn/cluster/_birch.py\n@@ -20,7 +20,7 @@\n from sklearn.exceptions import ConvergenceWarning\n from sklearn.metrics import pairwise_distances_argmin\n from sklearn.metrics.pairwise import euclidean_distances\n-from sklearn.utils._param_validation import Hidden, Interval, StrOptions\n+from sklearn.utils._param_validation import Interval\n from sklearn.utils.extmath import row_norms\n from sklearn.utils.validation import check_is_fitted, validate_data\n \n@@ -403,14 +403,6 @@ class Birch(\n     compute_labels : bool, default=True\n         Whether or not to compute labels for each fit.\n \n-    copy : bool, default=True\n-        Whether or not to make a copy of the given data. If set to False,\n-        the initial data will be overwritten.\n-\n-        .. deprecated:: 1.6\n-            `copy` was deprecated in 1.6 and will be removed in 1.8. It has no effect\n-            as the estimator does not perform in-place operations on the input data.\n-\n     Attributes\n     ----------\n     root_ : _CFNode\n@@ -493,7 +485,6 @@ class Birch(\n         \"branching_factor\": [Interval(Integral, 1, None, closed=\"neither\")],\n         \"n_clusters\": [None, ClusterMixin, Interval(Integral, 1, None, closed=\"left\")],\n         \"compute_labels\": [\"boolean\"],\n-        \"copy\": [\"boolean\", Hidden(StrOptions({\"deprecated\"}))],\n     }\n \n     def __init__(\n@@ -503,13 +494,11 @@ def __init__(\n         branching_factor=50,\n         n_clusters=3,\n         compute_labels=True,\n-        copy=\"deprecated\",\n     ):\n         self.threshold = threshold\n         self.branching_factor = branching_factor\n         self.n_clusters = n_clusters\n         self.compute_labels = compute_labels\n-        self.copy = copy\n \n     @_fit_context(prefer_skip_nested_validation=True)\n     def fit(self, X, y=None):\n@@ -535,14 +524,6 @@ def _fit(self, X, partial):\n         has_root = getattr(self, \"root_\", None)\n         first_call = not (partial and has_root)\n \n-        if self.copy != \"deprecated\" and first_call:\n-            warnings.warn(\n-                \"`copy` was deprecated in 1.6 and will be removed in 1.8 since it \"\n-                \"has no effect internally. Simply leave this parameter to its default \"\n-                \"value to avoid this warning.\",\n-                FutureWarning,\n-            )\n-\n         X = validate_data(\n             self,\n             X,\ndiff --git a/sklearn/cluster/tests/test_birch.py b/sklearn/cluster/tests/test_birch.py\nindex bc87934adaecd..fc1c702d1f462 100644\n--- a/sklearn/cluster/tests/test_birch.py\n+++ b/sklearn/cluster/tests/test_birch.py\n@@ -240,11 +240,3 @@ def test_both_subclusters_updated():\n \n     # no error\n     Birch(branching_factor=5, threshold=1e-5, n_clusters=None).fit(X)\n-\n-\n-# TODO(1.8): Remove\n-def test_birch_copy_deprecated():\n-    X, _ = make_blobs(n_samples=80, n_features=4, random_state=0)\n-    brc = Birch(n_clusters=4, copy=True)\n-    with pytest.warns(FutureWarning, match=\"`copy` was deprecated\"):\n-        brc.fit(X)\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/cluster/_birch.py",
+    "sklearn/cluster/tests/test_birch.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-09-11T13:31:56Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32160",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/29124"
+}

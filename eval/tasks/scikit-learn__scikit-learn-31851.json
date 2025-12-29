@@ -1,0 +1,28 @@
+{
+  "id": "scikit-learn__scikit-learn-31851",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "1fe659545c70d9f805c1c4097dd2fce9a6285a12",
+  "issue_number": 30689,
+  "issue_title": "FeatureHasher and HashingVectorizer does not expose requires_fit=False tag",
+  "issue_body": "While `FeatureHasher` and `HashingVectorizer` are stateless estimator (at least in their docstrings), they do not expose the `requires_fit` tag to `False` as other stateless estimator.\n\n@adrinjalali Do you recall when changing the tags if there was a particular reason for those estimator to not behave the same way than others?",
+  "pr_number": 31851,
+  "pr_title": "Fix requires_fit tag for stateless FeatureHasher and HashingVectorizer",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.feature_extraction/31851.fix.rst b/doc/whats_new/upcoming_changes/sklearn.feature_extraction/31851.fix.rst\nnew file mode 100644\nindex 0000000000000..5cc9e013d61f5\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.feature_extraction/31851.fix.rst\n@@ -0,0 +1,4 @@\n+- \ufeffSet the tag `requires_fit=False` for the classes\n+  :class:`feature_extraction.FeatureHasher` and\n+  :class:`feature_extraction.HashingVectorizer`.\n+  By :user:`hakan \u00e7anakc\u0131 <hqkqn32>`.\n\\ No newline at end of file\ndiff --git a/sklearn/feature_extraction/_hash.py b/sklearn/feature_extraction/_hash.py\nindex 328f9fc72a8eb..814bf912a42fc 100644\n--- a/sklearn/feature_extraction/_hash.py\n+++ b/sklearn/feature_extraction/_hash.py\n@@ -204,4 +204,5 @@ def __sklearn_tags__(self):\n             tags.input_tags.string = True\n         elif self.input_type == \"dict\":\n             tags.input_tags.dict = True\n+        tags.requires_fit = False\n         return tags\ndiff --git a/sklearn/feature_extraction/tests/test_feature_hasher.py b/sklearn/feature_extraction/tests/test_feature_hasher.py\nindex 276d0d48b0770..90c51d668f6c0 100644\n--- a/sklearn/feature_extraction/tests/test_feature_hasher.py\n+++ b/sklearn/feature_extraction/tests/test_feature_hasher.py\n@@ -158,3 +158,18 @@ def test_hash_collisions():\n         alternate_sign=False, n_features=1, input_type=\"string\"\n     ).fit_transform(X)\n     assert Xt.data[0] == len(X[0])\n+\n+\n+def test_feature_hasher_requires_fit_tag():\n+    \"\"\"Test that FeatureHasher has requires_fit=False tag.\"\"\"\n+    hasher = FeatureHasher()\n+    tags = hasher.__sklearn_tags__()\n+    assert not tags.requires_fit\n+\n+\n+def test_feature_hasher_transform_without_fit():\n+    \"\"\"Test that FeatureHasher can transform without fitting.\"\"\"\n+    hasher = FeatureHasher(n_features=10)\n+    data = [{\"dog\": 1, \"cat\": 2}, {\"dog\": 2, \"run\": 5}]\n+    result = hasher.transform(data)\n+    assert result.shape == (2, 10)\ndiff --git a/sklearn/feature_extraction/tests/test_text.py b/sklearn/feature_extraction/tests/test_text.py\nindex ab3f84668fd2d..00b94831767b5 100644\n--- a/sklearn/feature_extraction/tests/test_text.py\n+++ b/sklearn/feature_extraction/tests/test_text.py\n@@ -1626,3 +1626,18 @@ def test_tfidf_vectorizer_perserve_dtype_idf(dtype):\n     X = [str(uuid.uuid4()) for i in range(100_000)]\n     vectorizer = TfidfVectorizer(dtype=dtype).fit(X)\n     assert vectorizer.idf_.dtype == dtype\n+\n+\n+def test_hashing_vectorizer_requires_fit_tag():\n+    \"\"\"Test that HashingVectorizer has requires_fit=False tag.\"\"\"\n+    vectorizer = HashingVectorizer()\n+    tags = vectorizer.__sklearn_tags__()\n+    assert not tags.requires_fit\n+\n+\n+def test_hashing_vectorizer_transform_without_fit():\n+    \"\"\"Test that HashingVectorizer can transform without fitting.\"\"\"\n+    vectorizer = HashingVectorizer(n_features=10)\n+    corpus = [\"This is test\", \"Another test\"]\n+    result = vectorizer.transform(corpus)\n+    assert result.shape == (2, 10)\ndiff --git a/sklearn/feature_extraction/text.py b/sklearn/feature_extraction/text.py\nindex 96caad8d41280..ad924c00f3523 100644\n--- a/sklearn/feature_extraction/text.py\n+++ b/sklearn/feature_extraction/text.py\n@@ -923,6 +923,7 @@ def __sklearn_tags__(self):\n         tags = super().__sklearn_tags__()\n         tags.input_tags.string = True\n         tags.input_tags.two_d_array = False\n+        tags.requires_fit = False\n         return tags\n \n \n",
+  "fail_to_pass": [
+    "test_feature_hasher_requires_fit_tag",
+    "test_feature_hasher_transform_without_fit",
+    "test_hashing_vectorizer_requires_fit_tag",
+    "test_hashing_vectorizer_transform_without_fit"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/feature_extraction/_hash.py",
+    "sklearn/feature_extraction/tests/test_feature_hasher.py",
+    "sklearn/feature_extraction/tests/test_text.py",
+    "sklearn/feature_extraction/text.py"
+  ],
+  "difficulty": "hard",
+  "created_at": "2025-07-29T14:46:48Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31851",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/30689"
+}

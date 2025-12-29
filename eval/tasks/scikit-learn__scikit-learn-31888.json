@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-31888",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "c8a5f807a365a069b4d96da1a84318ce6253eab7",
+  "issue_number": 7486,
+  "issue_title": "LogisticRegression freezed when X containing large number",
+  "issue_body": "The following code will freeze\n\n``` python\nX = np.array([0, 1e+100]).reshape(-1, 1)\ny = np.array([0, 1])\nclf = LogisticRegression(solver='liblinear').fit(X, y)\n```\n\nIt seems to be a liblinear problem, the while loop [here](https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/svm/src/liblinear/tron.cpp#L170) is not breaking.\n\nMaybe a warning could be shown suggesting user to standardize data...\n",
+  "pr_number": 31888,
+  "pr_title": "Raise error logreg liblinear",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.linear_model/31888.api.rst b/doc/whats_new/upcoming_changes/sklearn.linear_model/31888.api.rst\nnew file mode 100644\nindex 0000000000000..a1ac21999bb09\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.linear_model/31888.api.rst\n@@ -0,0 +1,4 @@\n+- Raising error in :class:`sklearn.linear_model.LogisticRegression` when\n+  liblinear solver is used and input X values are larger than 1e30,\n+  the liblinear solver freezes otherwise.\n+  By :user:`Shruti Nath <snath-xoc>`.\ndiff --git a/sklearn/linear_model/_logistic.py b/sklearn/linear_model/_logistic.py\nindex f921f473da835..c803bdc0ba72d 100644\n--- a/sklearn/linear_model/_logistic.py\n+++ b/sklearn/linear_model/_logistic.py\n@@ -1295,6 +1295,12 @@ def fit(self, X, y, sample_weight=None):\n         multi_class = _check_multi_class(multi_class, solver, len(self.classes_))\n \n         if solver == \"liblinear\":\n+            if np.max(X) > 1e30:\n+                raise ValueError(\n+                    \"Using the 'liblinear' solver while X contains a maximum \"\n+                    \"value > 1e30 results in a frozen fit. Please choose another \"\n+                    \"solver or rescale the input X.\"\n+                )\n             if len(self.classes_) > 2:\n                 warnings.warn(\n                     \"Using the 'liblinear' solver for multiclass classification is \"\ndiff --git a/sklearn/linear_model/tests/test_logistic.py b/sklearn/linear_model/tests/test_logistic.py\nindex 6b08be5a95a0d..440c5d4fdbbb0 100644\n--- a/sklearn/linear_model/tests/test_logistic.py\n+++ b/sklearn/linear_model/tests/test_logistic.py\n@@ -2319,6 +2319,23 @@ def test_large_sparse_matrix(solver, global_random_seed, csr_container):\n         LogisticRegression(solver=solver).fit(X, y)\n \n \n+def test_liblinear_with_large_values():\n+    # Liblinear freezes when X.max() ~ 1e100, see issue #7486.\n+    # We preemptively raise an error when X.max() > 1e30.\n+\n+    # generate sparse matrix with int64 indices\n+    X = np.array([0, 1e100]).reshape(-1, 1)\n+    y = np.array([0, 1])\n+\n+    msg = (\n+        \"Using the 'liblinear' solver while X contains a maximum \"\n+        \"value > 1e30 results in a frozen fit. Please choose another \"\n+        \"solver or rescale the input X.\"\n+    )\n+    with pytest.raises(ValueError, match=msg):\n+        LogisticRegression(solver=\"liblinear\").fit(X, y)\n+\n+\n def test_single_feature_newton_cg():\n     # Test that Newton-CG works with a single feature and intercept.\n     # Non-regression test for issue #23605.\n",
+  "fail_to_pass": [
+    "test_liblinear_with_large_values"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/linear_model/_logistic.py",
+    "sklearn/linear_model/tests/test_logistic.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-08-07T10:42:33Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31888",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/7486"
+}

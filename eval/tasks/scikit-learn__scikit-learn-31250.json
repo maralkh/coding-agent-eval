@@ -1,0 +1,28 @@
+{
+  "id": "scikit-learn__scikit-learn-31250",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "7131d9488dfb8edd6ae042caca57dd76523f395b",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31250,
+  "pr_title": "TST use global_random_seed in sklearn/decomposition/tests/test_incremental_pca.py",
+  "gold_patch": "diff --git a/sklearn/decomposition/tests/test_incremental_pca.py b/sklearn/decomposition/tests/test_incremental_pca.py\nindex 6bca13d0ad627..c4ea1c222901c 100644\n--- a/sklearn/decomposition/tests/test_incremental_pca.py\n+++ b/sklearn/decomposition/tests/test_incremental_pca.py\n@@ -87,9 +87,9 @@ def test_incremental_pca_sparse(sparse_container):\n         ipca.partial_fit(X_sparse)\n \n \n-def test_incremental_pca_check_projection():\n+def test_incremental_pca_check_projection(global_random_seed):\n     # Test that the projection of data is correct.\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n, p = 100, 3\n     X = rng.randn(n, p) * 0.1\n     X[:10] += np.array([3, 4, 5])\n@@ -108,9 +108,9 @@ def test_incremental_pca_check_projection():\n     assert_almost_equal(np.abs(Yt[0][0]), 1.0, 1)\n \n \n-def test_incremental_pca_inverse():\n+def test_incremental_pca_inverse(global_random_seed):\n     # Test that the projection of data can be inverted.\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n, p = 50, 3\n     X = rng.randn(n, p)  # spherical data\n     X[:, 1] *= 0.00001  # make middle component relatively small\n@@ -217,9 +217,9 @@ def test_incremental_pca_num_features_change():\n         ipca.partial_fit(X2)\n \n \n-def test_incremental_pca_batch_signs():\n+def test_incremental_pca_batch_signs(global_random_seed):\n     # Test that components_ sign is stable over batch sizes.\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n_samples = 100\n     n_features = 3\n     X = rng.randn(n_samples, n_features)\n@@ -254,9 +254,9 @@ def test_incremental_pca_partial_fit_small_batch():\n     assert_allclose(pca.components_, pipca.components_, atol=1e-3)\n \n \n-def test_incremental_pca_batch_values():\n+def test_incremental_pca_batch_values(global_random_seed):\n     # Test that components_ values are stable over batch sizes.\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n_samples = 100\n     n_features = 3\n     X = rng.randn(n_samples, n_features)\n@@ -286,9 +286,9 @@ def test_incremental_pca_batch_rank():\n         assert_allclose_dense_sparse(components_i, components_j)\n \n \n-def test_incremental_pca_partial_fit():\n+def test_incremental_pca_partial_fit(global_random_seed):\n     # Test that fit and partial_fit get equivalent results.\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n, p = 50, 3\n     X = rng.randn(n, p)  # spherical data\n     X[:, 1] *= 0.00001  # make middle component relatively small\n@@ -316,9 +316,9 @@ def test_incremental_pca_against_pca_iris():\n     assert_almost_equal(np.abs(Y_pca), np.abs(Y_ipca), 1)\n \n \n-def test_incremental_pca_against_pca_random_data():\n+def test_incremental_pca_against_pca_random_data(global_random_seed):\n     # Test that IncrementalPCA and PCA are approximate (to a sign flip).\n-    rng = np.random.RandomState(1999)\n+    rng = np.random.RandomState(global_random_seed)\n     n_samples = 100\n     n_features = 3\n     X = rng.randn(n_samples, n_features) + 5 * rng.rand(1, n_features)\n@@ -348,10 +348,10 @@ def test_explained_variances():\n         assert_almost_equal(pca.noise_variance_, ipca.noise_variance_, decimal=prec)\n \n \n-def test_singular_values():\n+def test_singular_values(global_random_seed):\n     # Check that the IncrementalPCA output has the correct singular values\n \n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n     n_samples = 1000\n     n_features = 100\n \n@@ -360,7 +360,7 @@ def test_singular_values():\n     )\n \n     pca = PCA(n_components=10, svd_solver=\"full\", random_state=rng).fit(X)\n-    ipca = IncrementalPCA(n_components=10, batch_size=100).fit(X)\n+    ipca = IncrementalPCA(n_components=10, batch_size=150).fit(X)\n     assert_array_almost_equal(pca.singular_values_, ipca.singular_values_, 2)\n \n     # Compare to the Frobenius norm\n@@ -382,7 +382,7 @@ def test_singular_values():\n     )\n \n     # Set the singular values and see what we get back\n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n     n_samples = 100\n     n_features = 110\n \n",
+  "fail_to_pass": [
+    "test_incremental_pca_check_projection",
+    "test_incremental_pca_inverse",
+    "test_incremental_pca_batch_signs",
+    "test_incremental_pca_batch_values",
+    "test_incremental_pca_partial_fit",
+    "test_incremental_pca_against_pca_random_data",
+    "test_singular_values"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/decomposition/tests/test_incremental_pca.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-04-25T16:38:55Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31250",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-30145",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "429d67aa4ca853ab7aa5358cf4e7637345e51e08",
+  "issue_number": 29097,
+  "issue_title": "DEP PassiveAggressiveClassifier and PassiveAggressiveRegressor",
+  "issue_body": "#### Reference Issues/PRs\r\nsolves #15161\r\nhttps://github.com/scikit-learn/scikit-learn/issues/29088#issuecomment-2127465167\r\n\r\n\r\n#### What does this implement/fix? Explain your changes.\r\nThis PR deprecates the 2 classes `PassiveAggressiveClassifier` and `PassiveAggressiveRegressor` that were introduces in #1259. A user can easily use `SGDClassifier` and `SGDRegressor` instead and I cannot figure out the added value of these 2 classes.\r\n\r\n@scikit-learn/core-devs ping for decision (in particular in case you are against the deprecation)\r\n",
+  "pr_number": 30145,
+  "pr_title": "FIX signature of deprecated classes",
+  "gold_patch": "diff --git a/sklearn/utils/deprecation.py b/sklearn/utils/deprecation.py\nindex ff08ec2aceb81..35b9dfc8a47f6 100644\n--- a/sklearn/utils/deprecation.py\n+++ b/sklearn/utils/deprecation.py\n@@ -3,6 +3,7 @@\n \n import functools\n import warnings\n+from inspect import signature\n \n __all__ = [\"deprecated\"]\n \n@@ -64,17 +65,21 @@ def _decorate_class(self, cls):\n             msg += \"; %s\" % self.extra\n \n         new = cls.__new__\n+        sig = signature(cls)\n \n         def wrapped(cls, *args, **kwargs):\n             warnings.warn(msg, category=FutureWarning)\n             if new is object.__new__:\n                 return object.__new__(cls)\n+\n             return new(cls, *args, **kwargs)\n \n         cls.__new__ = wrapped\n \n         wrapped.__name__ = \"__new__\"\n         wrapped.deprecated_original = new\n+        # Restore the original signature, see PEP 362.\n+        cls.__signature__ = sig\n \n         return cls\n \ndiff --git a/sklearn/utils/tests/test_deprecation.py b/sklearn/utils/tests/test_deprecation.py\nindex 468be71ced157..7368af3041a19 100644\n--- a/sklearn/utils/tests/test_deprecation.py\n+++ b/sklearn/utils/tests/test_deprecation.py\n@@ -3,6 +3,7 @@\n \n \n import pickle\n+from inspect import signature\n \n import pytest\n \n@@ -86,3 +87,12 @@ def test_is_deprecated():\n \n def test_pickle():\n     pickle.loads(pickle.dumps(mock_function))\n+\n+\n+def test_deprecated_class_signature():\n+    @deprecated()\n+    class MockClass:\n+        def __init__(self, a, b=1, c=2):\n+            pass\n+\n+    assert list(signature(MockClass).parameters.keys()) == [\"a\", \"b\", \"c\"]\n",
+  "fail_to_pass": [
+    "test_deprecated_class_signature"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/deprecation.py",
+    "sklearn/utils/tests/test_deprecation.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2024-10-24T20:38:58Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/30145",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/29097"
+}

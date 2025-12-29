@@ -1,0 +1,24 @@
+{
+  "id": "scikit-learn__scikit-learn-30903",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "603720d6a2c2d0ed1162d1ee1663f31e3ceba771",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 30903,
+  "pr_title": "Error in d2_log_loss_score multiclass when one of the classes is missing in y_true.",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.metrics/30903.fix.rst b/doc/whats_new/upcoming_changes/sklearn.metrics/30903.fix.rst\nnew file mode 100644\nindex 0000000000000..90250f427dc20\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.metrics/30903.fix.rst\n@@ -0,0 +1,3 @@\n+- :func:`~metrics.d2_log_loss_score` now properly handles the case when `labels` is\n+  passed and not all of the labels are present in `y_true`.\n+  By :user:`Vassilis Margonis <vmargonis>`\ndiff --git a/sklearn/metrics/_classification.py b/sklearn/metrics/_classification.py\nindex 30dd53bc16109..6ac1adec0d44f 100644\n--- a/sklearn/metrics/_classification.py\n+++ b/sklearn/metrics/_classification.py\n@@ -3690,8 +3690,19 @@ def d2_log_loss_score(y_true, y_pred, *, sample_weight=None, labels=None):\n     # Proportion of labels in the dataset\n     weights = _check_sample_weight(sample_weight, y_true)\n \n-    _, y_value_indices = np.unique(y_true, return_inverse=True)\n-    counts = np.bincount(y_value_indices, weights=weights)\n+    # If labels is passed, augment y_true to ensure that all labels are represented\n+    # Use 0 weight for the new samples to not affect the counts\n+    y_true_, weights_ = (\n+        (\n+            np.concatenate([y_true, labels]),\n+            np.concatenate([weights, np.zeros_like(weights, shape=len(labels))]),\n+        )\n+        if labels is not None\n+        else (y_true, weights)\n+    )\n+\n+    _, y_value_indices = np.unique(y_true_, return_inverse=True)\n+    counts = np.bincount(y_value_indices, weights=weights_)\n     y_prob = counts / weights.sum()\n     y_pred_null = np.tile(y_prob, (len(y_true), 1))\n \ndiff --git a/sklearn/metrics/tests/test_classification.py b/sklearn/metrics/tests/test_classification.py\nindex 13fe8b3deb88e..86be624b91344 100644\n--- a/sklearn/metrics/tests/test_classification.py\n+++ b/sklearn/metrics/tests/test_classification.py\n@@ -3316,6 +3316,46 @@ def test_d2_log_loss_score():\n     assert d2_score < 0\n \n \n+def test_d2_log_loss_score_missing_labels():\n+    \"\"\"Check that d2_log_loss_score works when not all labels are present in y_true\n+\n+    non-regression test for https://github.com/scikit-learn/scikit-learn/issues/30713\n+    \"\"\"\n+    y_true = [2, 0, 2, 0]\n+    labels = [0, 1, 2]\n+    sample_weight = [1.4, 0.6, 0.7, 0.3]\n+    y_pred = np.tile([1, 0, 0], (4, 1))\n+\n+    log_loss_obs = log_loss(y_true, y_pred, sample_weight=sample_weight, labels=labels)\n+\n+    # Null model consists of weighted average of the classes.\n+    # Given that the sum of the weights is 3,\n+    # - weighted average of 0s is (0.6 + 0.3) / 3 = 0.3\n+    # - weighted average of 1s is 0\n+    # - weighted average of 2s is (1.4 + 0.7) / 3 = 0.7\n+    y_pred_null = np.tile([0.3, 0, 0.7], (4, 1))\n+    log_loss_null = log_loss(\n+        y_true, y_pred_null, sample_weight=sample_weight, labels=labels\n+    )\n+\n+    expected_d2_score = 1 - log_loss_obs / log_loss_null\n+    d2_score = d2_log_loss_score(\n+        y_true, y_pred, sample_weight=sample_weight, labels=labels\n+    )\n+    assert_allclose(d2_score, expected_d2_score)\n+\n+\n+def test_d2_log_loss_score_label_order():\n+    \"\"\"Check that d2_log_loss_score doesn't depend on the order of the labels.\"\"\"\n+    y_true = [2, 0, 2, 0]\n+    y_pred = np.tile([1, 0, 0], (4, 1))\n+\n+    d2_score = d2_log_loss_score(y_true, y_pred, labels=[0, 1, 2])\n+    d2_score_other = d2_log_loss_score(y_true, y_pred, labels=[0, 2, 1])\n+\n+    assert_allclose(d2_score, d2_score_other)\n+\n+\n def test_d2_log_loss_score_raises():\n     \"\"\"Test that d2_log_loss_score raises the appropriate errors on\n     invalid inputs.\"\"\"\n",
+  "fail_to_pass": [
+    "test_d2_log_loss_score_missing_labels",
+    "test_d2_log_loss_score_label_order"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/metrics/_classification.py",
+    "sklearn/metrics/tests/test_classification.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-02-25T21:53:02Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/30903",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-32265",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "1c246a965ae640e3484504469e6a6350911f8245",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 32265,
+  "pr_title": "ENH: StratifiedShuffleSplit to mentione classes with too few members",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.model_selection/32265.enhancement.rst b/doc/whats_new/upcoming_changes/sklearn.model_selection/32265.enhancement.rst\nnew file mode 100644\nindex 0000000000000..b9c87bfec19d9\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.model_selection/32265.enhancement.rst\n@@ -0,0 +1,4 @@\n+- :class:`model_selection.StratifiedShuffleSplit` will now specify which classes\n+   have too few members when raising a ``ValueError`` if any class has less than 2 members.\n+   This is useful to identify which classes are causing the error.\n+   By :user:`Marc Bresson <MarcBresson>`\ndiff --git a/sklearn/ensemble/tests/test_gradient_boosting.py b/sklearn/ensemble/tests/test_gradient_boosting.py\nindex 2258126a9497b..20866348697f6 100644\n--- a/sklearn/ensemble/tests/test_gradient_boosting.py\n+++ b/sklearn/ensemble/tests/test_gradient_boosting.py\n@@ -1331,7 +1331,11 @@ def test_early_stopping_stratified():\n \n     gbc = GradientBoostingClassifier(n_iter_no_change=5)\n     with pytest.raises(\n-        ValueError, match=\"The least populated class in y has only 1 member\"\n+        ValueError,\n+        match=(\n+            r\"The least populated classes in y have only 1 member.*Classes with \"\n+            r\"too few members are: \\[1.0\\]\"\n+        ),\n     ):\n         gbc.fit(X, y)\n \ndiff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py\nindex f32ee095cb0b0..1e434962b4672 100644\n--- a/sklearn/model_selection/_split.py\n+++ b/sklearn/model_selection/_split.py\n@@ -2330,16 +2330,19 @@ def _iter_indices(self, X, y, groups=None):\n             # using join because str(row) uses an ellipsis if len(row) > 1000\n             y = np.array([\" \".join(row.astype(\"str\")) for row in y])\n \n-        classes, y_indices = np.unique(y, return_inverse=True)\n+        classes, y_indices, class_counts = np.unique(\n+            y, return_inverse=True, return_counts=True\n+        )\n         n_classes = classes.shape[0]\n \n-        class_counts = np.bincount(y_indices)\n         if np.min(class_counts) < 2:\n+            too_few_classes = classes[class_counts < 2].tolist()\n             raise ValueError(\n-                \"The least populated class in y has only 1\"\n+                \"The least populated classes in y have only 1\"\n                 \" member, which is too few. The minimum\"\n                 \" number of groups for any class cannot\"\n-                \" be less than 2.\"\n+                \" be less than 2. Classes with too few\"\n+                \" members are: %s\" % (too_few_classes)\n             )\n \n         if n_train < n_classes:\ndiff --git a/sklearn/neural_network/tests/test_mlp.py b/sklearn/neural_network/tests/test_mlp.py\nindex f1ecf6cd6fb23..72eac916aaeb0 100644\n--- a/sklearn/neural_network/tests/test_mlp.py\n+++ b/sklearn/neural_network/tests/test_mlp.py\n@@ -822,7 +822,11 @@ def test_early_stopping_stratified():\n \n     mlp = MLPClassifier(early_stopping=True)\n     with pytest.raises(\n-        ValueError, match=\"The least populated class in y has only 1 member\"\n+        ValueError,\n+        match=(\n+            r\"The least populated classes in y have only 1 member.*Classes with \"\n+            r\"too few members are: \\['True'\\]\"\n+        ),\n     ):\n         mlp.fit(X, y)\n \n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/ensemble/tests/test_gradient_boosting.py",
+    "sklearn/model_selection/_split.py",
+    "sklearn/neural_network/tests/test_mlp.py"
+  ],
+  "difficulty": "hard",
+  "created_at": "2025-09-24T13:25:48Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32265",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

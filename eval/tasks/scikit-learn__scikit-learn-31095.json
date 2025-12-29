@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-31095",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "7505ed5ab5600dc280a2bd1566f364fbfd0bc18e",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31095,
+  "pr_title": "MNT: Use Polars in test_get_column_indices_interchange",
+  "gold_patch": "diff --git a/sklearn/utils/tests/test_indexing.py b/sklearn/utils/tests/test_indexing.py\nindex e300ad6fdec87..27b51da5ff962 100644\n--- a/sklearn/utils/tests/test_indexing.py\n+++ b/sklearn/utils/tests/test_indexing.py\n@@ -449,20 +449,10 @@ def test_get_column_indices_pandas_nonunique_columns_error(key):\n \n def test_get_column_indices_interchange():\n     \"\"\"Check _get_column_indices for edge cases with the interchange\"\"\"\n-    pd = pytest.importorskip(\"pandas\", minversion=\"1.5\")\n+    pl = pytest.importorskip(\"polars\")\n \n-    df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=[\"a\", \"b\", \"c\"])\n-\n-    # Hide the fact that this is a pandas dataframe to trigger the dataframe protocol\n-    # code path.\n-    class MockDataFrame:\n-        def __init__(self, df):\n-            self._df = df\n-\n-        def __getattr__(self, name):\n-            return getattr(self._df, name)\n-\n-    df_mocked = MockDataFrame(df)\n+    # Polars dataframes go down the interchange path.\n+    df = pl.DataFrame([[1, 2, 3], [4, 5, 6]], schema=[\"a\", \"b\", \"c\"])\n \n     key_results = [\n         (slice(1, None), [1, 2]),\n@@ -476,15 +466,15 @@ def __getattr__(self, name):\n         ([], []),\n     ]\n     for key, result in key_results:\n-        assert _get_column_indices(df_mocked, key) == result\n+        assert _get_column_indices(df, key) == result\n \n     msg = \"A given column is not a column of the dataframe\"\n     with pytest.raises(ValueError, match=msg):\n-        _get_column_indices(df_mocked, [\"not_a_column\"])\n+        _get_column_indices(df, [\"not_a_column\"])\n \n     msg = \"key.step must be 1 or None\"\n     with pytest.raises(NotImplementedError, match=msg):\n-        _get_column_indices(df_mocked, slice(\"a\", None, 2))\n+        _get_column_indices(df, slice(\"a\", None, 2))\n \n \n def test_resample():\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/tests/test_indexing.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-03-27T17:47:25Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31095",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

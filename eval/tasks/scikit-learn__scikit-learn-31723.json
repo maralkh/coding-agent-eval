@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-31723",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "cfd5f7833dfb3794e711e79e4a3373e599d5a1f0",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31723,
+  "pr_title": "FIX Avoid fitting a pipeline without steps",
+  "gold_patch": "diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py\nindex f46c150b40313..95eb5df275468 100644\n--- a/sklearn/pipeline.py\n+++ b/sklearn/pipeline.py\n@@ -320,6 +320,8 @@ def set_params(self, **kwargs):\n         return self\n \n     def _validate_steps(self):\n+        if not self.steps:\n+            raise ValueError(\"The pipeline is empty. Please add steps.\")\n         names, estimators = zip(*self.steps)\n \n         # validate names\n@@ -1289,7 +1291,6 @@ def __sklearn_is_fitted__(self):\n \n         An empty pipeline is considered fitted.\n         \"\"\"\n-\n         # First find the last step that is not 'passthrough'\n         last_step = None\n         for _, estimator in reversed(self.steps):\ndiff --git a/sklearn/tests/test_pipeline.py b/sklearn/tests/test_pipeline.py\nindex ad00ffb67a616..3815f264a8e7f 100644\n--- a/sklearn/tests/test_pipeline.py\n+++ b/sklearn/tests/test_pipeline.py\n@@ -282,6 +282,16 @@ def test_pipeline_invalid_parameters():\n     assert params == params2\n \n \n+def test_empty_pipeline():\n+    X = iris.data\n+    y = iris.target\n+\n+    pipe = Pipeline([])\n+    msg = \"The pipeline is empty. Please add steps.\"\n+    with pytest.raises(ValueError, match=msg):\n+        pipe.fit(X, y)\n+\n+\n def test_pipeline_init_tuple():\n     # Pipeline accepts steps as tuple\n     X = np.array([[1, 2]])\n",
+  "fail_to_pass": [
+    "test_empty_pipeline"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/pipeline.py",
+    "sklearn/tests/test_pipeline.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-07-08T08:58:00Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31723",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

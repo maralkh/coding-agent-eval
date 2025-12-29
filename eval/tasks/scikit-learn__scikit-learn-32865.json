@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-32865",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "bd0dd87f792ee88c8ec70248299aae779b51ac16",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 32865,
+  "pr_title": "FIX add quickfix for pandas warning causing CI error",
+  "gold_patch": "diff --git a/sklearn/preprocessing/tests/test_target_encoder.py b/sklearn/preprocessing/tests/test_target_encoder.py\nindex 536f2e031bf77..84f04ec46f343 100644\n--- a/sklearn/preprocessing/tests/test_target_encoder.py\n+++ b/sklearn/preprocessing/tests/test_target_encoder.py\n@@ -1,4 +1,5 @@\n import re\n+import warnings\n \n import numpy as np\n import pytest\n@@ -20,6 +21,7 @@\n     LabelEncoder,\n     TargetEncoder,\n )\n+from sklearn.utils.fixes import parse_version\n \n \n def _encode_target(X_ordinal, y_numeric, n_categories, smooth):\n@@ -709,6 +711,25 @@ def test_pandas_copy_on_write():\n     Non-regression test for gh-27879.\n     \"\"\"\n     pd = pytest.importorskip(\"pandas\", minversion=\"2.0\")\n-    with pd.option_context(\"mode.copy_on_write\", True):\n+    # Pandas currently warns that setting copy_on_write will be removed in pandas 4\n+    # (and copy-on-write will always be enabled).\n+    # see https://github.com/scikit-learn/scikit-learn/issues/32829\n+    # TODO: remove this workaround when pandas 4 is our minimum version\n+    if parse_version(pd.__version__) >= parse_version(\"4.0\"):\n         df = pd.DataFrame({\"x\": [\"a\", \"b\", \"b\"], \"y\": [4.0, 5.0, 6.0]})\n         TargetEncoder(target_type=\"continuous\").fit(df[[\"x\"]], df[\"y\"])\n+    else:\n+        with warnings.catch_warnings():\n+            expected_message = (\n+                \"Copy-on-Write can no longer be disabled, \"\n+                \"setting to False has no impact. This option will \"\n+                \"be removed in pandas 4.0.\"\n+            )\n+            warnings.filterwarnings(\n+                \"ignore\",\n+                message=re.escape(expected_message),\n+                category=DeprecationWarning,\n+            )\n+            with pd.option_context(\"mode.copy_on_write\", True):\n+                df = pd.DataFrame({\"x\": [\"a\", \"b\", \"b\"], \"y\": [4.0, 5.0, 6.0]})\n+                TargetEncoder(target_type=\"continuous\").fit(df[[\"x\"]], df[\"y\"])\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/preprocessing/tests/test_target_encoder.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-12-08T13:57:26Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32865",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-31928",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "e099dba29ecbc6612c9a5ba715ef0f60915f97f5",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31928,
+  "pr_title": "Customized dir method to recognize available_if decorator",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.base/31928.feature.rst b/doc/whats_new/upcoming_changes/sklearn.base/31928.feature.rst\nnew file mode 100644\nindex 0000000000000..9b83b3a562f3a\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.base/31928.feature.rst\n@@ -0,0 +1,2 @@\n+- Refactored :method:`dir` in :class:`BaseEstimator` to recognize condition check in :method:`available_if`.\n+  By :user:`John Hendricks <j-hendricks>` and :user:`Miguel Parece <MiguelParece>`.\ndiff --git a/sklearn/base.py b/sklearn/base.py\nindex 4fe2121f87b1e..ec34cb57e6a62 100644\n--- a/sklearn/base.py\n+++ b/sklearn/base.py\n@@ -197,6 +197,13 @@ class BaseEstimator(ReprHTMLMixin, _HTMLDocumentationLinkMixin, _MetadataRequest\n     array([3, 3, 3])\n     \"\"\"\n \n+    def __dir__(self):\n+        # Filters conditional methods that should be hidden based\n+        # on the `available_if` decorator\n+        with warnings.catch_warnings():\n+            warnings.filterwarnings(\"ignore\", category=FutureWarning)\n+            return [attr for attr in super().__dir__() if hasattr(self, attr)]\n+\n     _html_repr = estimator_html_repr\n \n     @classmethod\ndiff --git a/sklearn/tests/test_multiclass.py b/sklearn/tests/test_multiclass.py\nindex 66bbb039606f5..f67cbbcc5f7bb 100644\n--- a/sklearn/tests/test_multiclass.py\n+++ b/sklearn/tests/test_multiclass.py\n@@ -29,6 +29,7 @@\n from sklearn.naive_bayes import MultinomialNB\n from sklearn.neighbors import KNeighborsClassifier\n from sklearn.pipeline import Pipeline, make_pipeline\n+from sklearn.preprocessing import LabelEncoder, StandardScaler\n from sklearn.svm import SVC, LinearSVC\n from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor\n from sklearn.utils import (\n@@ -82,6 +83,22 @@ def test_check_classification_targets():\n         check_classification_targets(y)\n \n \n+def test_conditional_attrs_not_in_dir():\n+    # Test that __dir__ includes only relevant attributes. #28558\n+\n+    encoder = LabelEncoder()\n+    assert \"set_output\" not in dir(encoder)\n+\n+    scalar = StandardScaler()\n+    assert \"set_output\" in dir(scalar)\n+\n+    svc = SVC(probability=False)\n+    assert \"predict_proba\" not in dir(svc)\n+\n+    svc.probability = True\n+    assert \"predict_proba\" in dir(svc)\n+\n+\n def test_ovr_ties():\n     \"\"\"Check that ties-breaking matches np.argmax behavior\n \n",
+  "fail_to_pass": [
+    "test_conditional_attrs_not_in_dir"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/base.py",
+    "sklearn/tests/test_multiclass.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-08-12T03:29:47Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31928",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

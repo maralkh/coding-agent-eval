@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-32151",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "40f68d27c9e3f65c98041108ca1e16255eacbc9f",
+  "issue_number": 31560,
+  "issue_title": "BLD: use more modern way to specify license metadata",
+  "issue_body": "#### Reference Issues/PRs\r\nCloses https://github.com/scikit-learn/scikit-learn/issues/30766\r\n\r\n#### What does this implement/fix? Explain your changes.\r\nUpdates means of specifying LICENSE. See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license-and-license-files\r\n\r\n#### Any other comments?\r\nN/A\r\n\r\n@betatim @glemaitre ",
+  "pr_number": 32151,
+  "pr_title": "meson-python 0.17.1+ required to build sklearn",
+  "gold_patch": "diff --git a/pyproject.toml b/pyproject.toml\nindex 628383ed36def..1ac120903e92b 100644\n--- a/pyproject.toml\n+++ b/pyproject.toml\n@@ -97,10 +97,10 @@ maintenance = [\"conda-lock==3.0.1\"]\n build-backend = \"mesonpy\"\n # Minimum requirements for the build system to execute.\n requires = [\n-    \"meson-python>=0.16.0\",\n+    \"meson-python>=0.17.1\",\n     \"Cython>=3.1.2\",\n     \"numpy>=2\",\n-    \"scipy>=1.8.0\",\n+    \"scipy>=1.10.0\",\n ]\n \n [tool.pytest.ini_options]\ndiff --git a/sklearn/tests/test_min_dependencies_readme.py b/sklearn/tests/test_min_dependencies_readme.py\nindex 6ec6686a61751..d6e8e138c4fe8 100644\n--- a/sklearn/tests/test_min_dependencies_readme.py\n+++ b/sklearn/tests/test_min_dependencies_readme.py\n@@ -16,14 +16,13 @@\n     for extra in extras.split(\", \"):\n         min_depencies_tag_to_packages_without_version[extra].append(package)\n \n-min_dependencies_tag_to_pyproject_section = {\n-    \"build\": \"build-system.requires\",\n-    \"install\": \"project.dependencies\",\n+pyproject_section_to_min_dependencies_tag = {\n+    \"build-system.requires\": \"build\",\n+    \"project.dependencies\": \"install\",\n }\n for tag in min_depencies_tag_to_packages_without_version:\n-    min_dependencies_tag_to_pyproject_section[tag] = (\n-        f\"project.optional-dependencies.{tag}\"\n-    )\n+    section = f\"project.optional-dependencies.{tag}\"\n+    pyproject_section_to_min_dependencies_tag[section] = tag\n \n \n def test_min_dependencies_readme():\n@@ -108,6 +107,10 @@ def check_pyproject_section(\n                 \"Only >= and == are supported for version requirements\"\n             )\n \n+        # It's Cython in pyproject.toml but cython in _min_dependencies.py\n+        if package == \"Cython\":\n+            package = \"cython\"\n+\n         pyproject_build_min_versions[package] = version\n \n     assert sorted(pyproject_build_min_versions) == sorted(expected_packages)\n@@ -126,8 +129,8 @@ def check_pyproject_section(\n \n \n @pytest.mark.parametrize(\n-    \"min_dependencies_tag, pyproject_section\",\n-    min_dependencies_tag_to_pyproject_section.items(),\n+    \"pyproject_section, min_dependencies_tag\",\n+    pyproject_section_to_min_dependencies_tag.items(),\n )\n def test_min_dependencies_pyproject_toml(pyproject_section, min_dependencies_tag):\n     \"\"\"Check versions in pyproject.toml is consistent with _min_dependencies.\"\"\"\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/tests/test_min_dependencies_readme.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-09-10T16:24:24Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32151",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/31560"
+}

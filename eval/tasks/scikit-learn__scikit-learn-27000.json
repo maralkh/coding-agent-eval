@@ -1,0 +1,26 @@
+{
+  "id": "scikit-learn__scikit-learn-27000",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "f5a3d2e1c4b6a8e0d2f4c6b8a0e2d4f6c8a0b2d4",
+  "issue_number": 26999,
+  "issue_title": "ENH: Add n_jobs parameter to KNeighborsClassifier.predict_proba",
+  "issue_body": "### Describe the feature\n\nCurrently `KNeighborsClassifier.predict_proba` does not use parallel computation even when `n_jobs` is set. This makes probability prediction slow for large datasets.\n\n### Expected Behavior\n\nWhen `n_jobs > 1` is set on the classifier, `predict_proba` should use parallel computation similar to `predict`.\n\n### Code to reproduce\n\n```python\nfrom sklearn.neighbors import KNeighborsClassifier\nimport numpy as np\n\nX = np.random.rand(10000, 100)\ny = np.random.randint(0, 5, 10000)\n\nclf = KNeighborsClassifier(n_jobs=4)\nclf.fit(X, y)\n\n# This is slow because it doesn't use n_jobs\nproba = clf.predict_proba(X)\n```\n\n### Versions\nscikit-learn: 1.2.0",
+  "pr_number": 27000,
+  "pr_title": "ENH Add parallel support to KNeighborsClassifier.predict_proba",
+  "gold_patch": "diff --git a/sklearn/neighbors/_classification.py b/sklearn/neighbors/_classification.py\n--- a/sklearn/neighbors/_classification.py\n+++ b/sklearn/neighbors/_classification.py\n@@ -200,7 +200,7 @@ class KNeighborsClassifier(NeighborsBase, ClassifierMixin):\n     def predict_proba(self, X):\n         \"\"\"Return probability estimates for the test data X.\"\"\"\n         X = check_array(X, accept_sparse='csr')\n-        neigh_dist, neigh_ind = self.kneighbors(X)\n+        neigh_dist, neigh_ind = self.kneighbors(X, n_jobs=self.n_jobs)\n \n         classes_ = self.classes_\n         _y = self._y\n",
+  "fail_to_pass": [
+    "test_kneighbors_classifier_predict_proba_parallel"
+  ],
+  "pass_to_pass": [
+    "test_kneighbors_classifier",
+    "test_kneighbors_classifier_predict_proba"
+  ],
+  "relevant_files": [
+    "sklearn/neighbors/_classification.py",
+    "sklearn/neighbors/tests/test_neighbors.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2023-08-10T14:20:00Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/27000",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/26999"
+}

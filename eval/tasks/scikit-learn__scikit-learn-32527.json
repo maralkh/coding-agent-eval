@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-32527",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "c6b547c57e79cb72bb19b5e032ad2a2f028bdfea",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 32527,
+  "pr_title": "MNT Clean up deprecations for 1.8: _estimator_html_repr",
+  "gold_patch": "diff --git a/sklearn/tests/test_common.py b/sklearn/tests/test_common.py\nindex ec83b79d8c321..3fcbf48b4a10c 100644\n--- a/sklearn/tests/test_common.py\n+++ b/sklearn/tests/test_common.py\n@@ -138,10 +138,6 @@ def test_check_estimator_generate_only_deprecation():\n     \"ignore:Since version 1.0, it is not needed to import \"\n     \"enable_hist_gradient_boosting anymore\"\n )\n-# TODO(1.8): remove this filter\n-@pytest.mark.filterwarnings(\n-    \"ignore:Importing from sklearn.utils._estimator_html_repr is deprecated.\"\n-)\n @pytest.mark.thread_unsafe  # import side-effects\n def test_import_all_consistency():\n     sklearn_path = [os.path.dirname(sklearn.__file__)]\ndiff --git a/sklearn/utils/_estimator_html_repr.py b/sklearn/utils/_estimator_html_repr.py\ndeleted file mode 100644\nindex b54a0b4e90b2a..0000000000000\n--- a/sklearn/utils/_estimator_html_repr.py\n+++ /dev/null\n@@ -1,34 +0,0 @@\n-# Authors: The scikit-learn developers\n-# SPDX-License-Identifier: BSD-3-Clause\n-\n-import warnings\n-\n-from sklearn.utils._repr_html.base import _HTMLDocumentationLinkMixin\n-from sklearn.utils._repr_html.estimator import (\n-    _get_visual_block,\n-    _IDCounter,\n-    _VisualBlock,\n-    _write_estimator_html,\n-    _write_label_html,\n-    estimator_html_repr,\n-)\n-\n-__all__ = [\n-    \"_HTMLDocumentationLinkMixin\",\n-    \"_IDCounter\",\n-    \"_VisualBlock\",\n-    \"_get_visual_block\",\n-    \"_write_estimator_html\",\n-    \"_write_label_html\",\n-    \"estimator_html_repr\",\n-]\n-\n-# TODO(1.8): Remove the entire module\n-warnings.warn(\n-    \"Importing from sklearn.utils._estimator_html_repr is deprecated. The tools have \"\n-    \"been moved to sklearn.utils._repr_html. Be aware that this module is private and \"\n-    \"may be subject to change in the future. The module _estimator_html_repr will be \"\n-    \"removed in 1.8.0.\",\n-    FutureWarning,\n-    stacklevel=2,\n-)\ndiff --git a/sklearn/utils/tests/test_estimator_html_repr.py b/sklearn/utils/tests/test_estimator_html_repr.py\ndeleted file mode 100644\nindex 9b4f27003b8ac..0000000000000\n--- a/sklearn/utils/tests/test_estimator_html_repr.py\n+++ /dev/null\n@@ -1,22 +0,0 @@\n-# Authors: The scikit-learn developers\n-# SPDX-License-Identifier: BSD-3-Clause\n-\n-import importlib\n-import sys\n-\n-import pytest\n-\n-\n-# TODO(1.8): Remove the entire file\n-@pytest.mark.thread_unsafe\n-def test_estimator_html_repr_warning():\n-    with pytest.warns(FutureWarning):\n-        # Make sure that we check for the warning when loading the module (reloading it\n-        # if needed).\n-        module_name = \"sklearn.utils._estimator_html_repr\"\n-        if module_name in sys.modules:\n-            importlib.reload(sys.modules[module_name])\n-        else:\n-            importlib.import_module(module_name)\n-\n-    assert sys.modules[module_name] is not None\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/tests/test_common.py",
+    "sklearn/utils/_estimator_html_repr.py",
+    "sklearn/utils/tests/test_estimator_html_repr.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-10-17T12:56:49Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32527",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

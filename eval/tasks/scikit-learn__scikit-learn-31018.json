@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-31018",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "5cdbbf15e3fade7cc2462ef66dc4ea0f37f390e3",
+  "issue_number": 30976,
+  "issue_title": "MNT Update ruff",
+  "issue_body": "#### What does this implement/fix? Explain your changes.\r\n\r\n* Bump ruff from 0.5.1 to ~~0.9.10~~ 0.11.0\r\n* Update comments and URL associated to ruff\r\n \r\n#### Any other comments?\r\n",
+  "pr_number": 31018,
+  "pr_title": "MNT Update mypy",
+  "gold_patch": "diff --git a/.pre-commit-config.yaml b/.pre-commit-config.yaml\nindex e8730b679a5d6..cecc0e705cd73 100644\n--- a/.pre-commit-config.yaml\n+++ b/.pre-commit-config.yaml\n@@ -16,7 +16,7 @@ repos:\n     hooks:\n     -   id: black\n -   repo: https://github.com/pre-commit/mirrors-mypy\n-    rev: v1.9.0\n+    rev: v1.15.0\n     hooks:\n      -  id: mypy\n         files: sklearn/\ndiff --git a/pyproject.toml b/pyproject.toml\nindex a96c517cf840e..3be6887e3d391 100644\n--- a/pyproject.toml\n+++ b/pyproject.toml\n@@ -85,7 +85,7 @@ tests = [\n     \"pytest-cov>=2.9.0\",\n     \"ruff>=0.5.1\",\n     \"black>=24.3.0\",\n-    \"mypy>=1.9\",\n+    \"mypy>=1.15\",\n     \"pyamg>=5.0.0\",\n     \"polars>=0.20.30\",\n     \"pyarrow>=12.0.0\",\ndiff --git a/sklearn/_loss/tests/test_loss.py b/sklearn/_loss/tests/test_loss.py\nindex ae94f4c1192b4..69ff18d376fee 100644\n--- a/sklearn/_loss/tests/test_loss.py\n+++ b/sklearn/_loss/tests/test_loss.py\n@@ -204,7 +204,7 @@ def test_loss_boundary(loss):\n \n \n @pytest.mark.parametrize(\n-    \"loss, y_true_success, y_true_fail\", Y_COMMON_PARAMS + Y_TRUE_PARAMS\n+    \"loss, y_true_success, y_true_fail\", Y_COMMON_PARAMS + Y_TRUE_PARAMS  # type: ignore[operator]\n )\n def test_loss_boundary_y_true(loss, y_true_success, y_true_fail):\n     \"\"\"Test boundaries of y_true for loss functions.\"\"\"\n@@ -215,7 +215,7 @@ def test_loss_boundary_y_true(loss, y_true_success, y_true_fail):\n \n \n @pytest.mark.parametrize(\n-    \"loss, y_pred_success, y_pred_fail\", Y_COMMON_PARAMS + Y_PRED_PARAMS  # type: ignore\n+    \"loss, y_pred_success, y_pred_fail\", Y_COMMON_PARAMS + Y_PRED_PARAMS  # type: ignore[operator]\n )\n def test_loss_boundary_y_pred(loss, y_pred_success, y_pred_fail):\n     \"\"\"Test boundaries of y_pred for loss functions.\"\"\"\ndiff --git a/sklearn/_min_dependencies.py b/sklearn/_min_dependencies.py\nindex 8e0592abddd74..4b64fc9b11b71 100644\n--- a/sklearn/_min_dependencies.py\n+++ b/sklearn/_min_dependencies.py\n@@ -34,7 +34,7 @@\n     \"pytest-cov\": (\"2.9.0\", \"tests\"),\n     \"ruff\": (\"0.5.1\", \"tests\"),\n     \"black\": (\"24.3.0\", \"tests\"),\n-    \"mypy\": (\"1.9\", \"tests\"),\n+    \"mypy\": (\"1.15\", \"tests\"),\n     \"pyamg\": (\"5.0.0\", \"tests\"),\n     \"polars\": (\"0.20.30\", \"docs, tests\"),\n     \"pyarrow\": (\"12.0.0\", \"tests\"),\ndiff --git a/sklearn/tree/_classes.py b/sklearn/tree/_classes.py\nindex 53a1187ec5a50..ec042326d5ea9 100644\n--- a/sklearn/tree/_classes.py\n+++ b/sklearn/tree/_classes.py\n@@ -1993,5 +1993,5 @@ def __sklearn_tags__(self):\n             \"friedman_mse\",\n             \"poisson\",\n         }\n-        tags.input_tags.allow_nan: allow_nan\n+        tags.input_tags.allow_nan = allow_nan\n         return tags\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/_loss/tests/test_loss.py",
+    "sklearn/_min_dependencies.py",
+    "sklearn/tree/_classes.py"
+  ],
+  "difficulty": "hard",
+  "created_at": "2025-03-18T18:24:22Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31018",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/30976"
+}

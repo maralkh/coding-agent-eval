@@ -1,0 +1,21 @@
+{
+  "id": "scikit-learn__scikit-learn-31481",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "7d0cbaf20f2a517139cad35540da72858fcb14ab",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31481,
+  "pr_title": "Improve error message in `check_requires_y_none`",
+  "gold_patch": "diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py\nindex 6347692842615..9bfa048984e38 100644\n--- a/sklearn/utils/estimator_checks.py\n+++ b/sklearn/utils/estimator_checks.py\n@@ -4397,7 +4397,14 @@ def check_requires_y_none(name, estimator_orig):\n         estimator.fit(X, None)\n     except ValueError as ve:\n         if not any(msg in str(ve) for msg in expected_err_msgs):\n-            raise ve\n+            raise ValueError(\n+                \"Your estimator raised a ValueError, but with the incorrect or \"\n+                \"incomplete error message to be considered a graceful fail. \"\n+                \"The expected message in the ValueError should contain one of \"\n+                f\"these literal strings:\\n{expected_err_msgs}. \"\n+                f\"For example, you could have `ValueError('{expected_err_msgs[0]}')`.\\n\"\n+                f\"This is the error message in your exception:\\n{ve}\"\n+            )\n \n \n @ignore_warnings(category=FutureWarning)\ndiff --git a/sklearn/utils/tests/test_estimator_checks.py b/sklearn/utils/tests/test_estimator_checks.py\nindex bd313d2397a0f..4fab82e17cc92 100644\n--- a/sklearn/utils/tests/test_estimator_checks.py\n+++ b/sklearn/utils/tests/test_estimator_checks.py\n@@ -1437,6 +1437,27 @@ def fit(self, X, y):\n     # no warnings are raised\n     assert not [r.message for r in record]\n \n+    # Make an estimator that throws the wrong error to make sure we catch it\n+    class EstimatorWithWrongError(BaseEstimator):\n+        def fit(self, X, y):\n+            try:\n+                X, y = check_X_y(X, y)\n+            except ValueError as ve:\n+                # This assertion is just to make sure we are catching the value error\n+                # that comes from wrong y (=None) and not some other value error\n+                assert str(ve) == (\n+                    \"estimator requires y to be passed, but the target y is None\"\n+                )\n+                # Override the error message force fail\n+                raise ValueError(\"This is the wrong message that raises error\")\n+\n+    err_msg = (\n+        \"Your estimator raised a ValueError, but with the incorrect or \"\n+        \"incomplete error message to be considered a graceful fail.\"\n+    )\n+    with raises(ValueError, match=err_msg):\n+        check_requires_y_none(\"estimator\", EstimatorWithWrongError())\n+\n \n def test_non_deterministic_estimator_skip_tests():\n     # check estimators with non_deterministic tag set to True\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/estimator_checks.py",
+    "sklearn/utils/tests/test_estimator_checks.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-06-04T14:27:18Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31481",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

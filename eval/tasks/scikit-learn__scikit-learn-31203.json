@@ -1,0 +1,25 @@
+{
+  "id": "scikit-learn__scikit-learn-31203",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "d99c7cf8e8c6ef159e1a4e1f1e92308d4245e13b",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31203,
+  "pr_title": "TST Use global_random_seed in `sklearn/decomposition/tests/test_fastica.py`",
+  "gold_patch": "diff --git a/sklearn/decomposition/tests/test_fastica.py b/sklearn/decomposition/tests/test_fastica.py\nindex 4d3319c0ee32b..6f8c9c55db621 100644\n--- a/sklearn/decomposition/tests/test_fastica.py\n+++ b/sklearn/decomposition/tests/test_fastica.py\n@@ -32,10 +32,10 @@ def center_and_norm(x, axis=-1):\n     x /= x.std(axis=0)\n \n \n-def test_gs():\n+def test_gs(global_random_seed):\n     # Test gram schmidt orthonormalization\n     # generate a random orthogonal  matrix\n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n     W, _, _ = np.linalg.svd(rng.randn(10, 10))\n     w = rng.randn(10)\n     _gs_decorrelation(w, W, 10)\n@@ -188,11 +188,11 @@ def test_fastica_nowhiten():\n     assert hasattr(ica, \"mixing_\")\n \n \n-def test_fastica_convergence_fail():\n+def test_fastica_convergence_fail(global_random_seed):\n     # Test the FastICA algorithm on very simple data\n     # (see test_non_square_fastica).\n     # Ensure a ConvergenceWarning raised if the tolerance is sufficiently low.\n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n \n     n_samples = 1000\n     # Generate two sources:\n@@ -219,9 +219,9 @@ def test_fastica_convergence_fail():\n \n \n @pytest.mark.parametrize(\"add_noise\", [True, False])\n-def test_non_square_fastica(add_noise):\n+def test_non_square_fastica(global_random_seed, add_noise):\n     # Test the FastICA algorithm on very simple data.\n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n \n     n_samples = 1000\n     # Generate two sources:\n@@ -372,12 +372,12 @@ def test_fastica_errors():\n         fastica(X, w_init=w_init)\n \n \n-def test_fastica_whiten_unit_variance():\n+def test_fastica_whiten_unit_variance(global_random_seed):\n     \"\"\"Test unit variance of transformed data using FastICA algorithm.\n \n     Bug #13056\n     \"\"\"\n-    rng = np.random.RandomState(0)\n+    rng = np.random.RandomState(global_random_seed)\n     X = rng.random_sample((100, 10))\n     n_components = X.shape[1]\n     ica = FastICA(n_components=n_components, whiten=\"unit-variance\", random_state=0)\n",
+  "fail_to_pass": [
+    "test_gs",
+    "test_fastica_convergence_fail",
+    "test_non_square_fastica",
+    "test_fastica_whiten_unit_variance"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/decomposition/tests/test_fastica.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-04-14T14:50:08Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31203",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}

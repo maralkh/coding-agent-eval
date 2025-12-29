@@ -1,0 +1,22 @@
+{
+  "id": "scikit-learn__scikit-learn-30168",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "4ee3afa5524675f6466a21d7f36c591a3eda53ef",
+  "issue_number": 30162,
+  "issue_title": ":lock: :robot: CI Update lock files for cirrus-arm CI build(s) :lock: :robot:",
+  "issue_body": "Update lock files.\n\n### Note\nIf the CI tasks fail, create a new branch based on this PR and add the required fixes to that branch.",
+  "pr_number": 30168,
+  "pr_title": "TST Improve `sklearn.linear_model.test_quantile.test_sparse_input`",
+  "gold_patch": "diff --git a/sklearn/linear_model/tests/test_quantile.py b/sklearn/linear_model/tests/test_quantile.py\nindex da96593de00f2..1d166b14091cc 100644\n--- a/sklearn/linear_model/tests/test_quantile.py\n+++ b/sklearn/linear_model/tests/test_quantile.py\n@@ -10,7 +10,7 @@\n from sklearn.exceptions import ConvergenceWarning\n from sklearn.linear_model import HuberRegressor, QuantileRegressor\n from sklearn.metrics import mean_pinball_loss\n-from sklearn.utils._testing import assert_allclose, skip_if_32bit\n+from sklearn.utils._testing import assert_allclose\n from sklearn.utils.fixes import (\n     COO_CONTAINERS,\n     CSC_CONTAINERS,\n@@ -233,26 +233,40 @@ def test_linprog_failure():\n         reg.fit(X, y)\n \n \n-@skip_if_32bit\n @pytest.mark.parametrize(\n     \"sparse_container\", CSC_CONTAINERS + CSR_CONTAINERS + COO_CONTAINERS\n )\n @pytest.mark.parametrize(\"solver\", [\"highs\", \"highs-ds\", \"highs-ipm\"])\n @pytest.mark.parametrize(\"fit_intercept\", [True, False])\n-def test_sparse_input(sparse_container, solver, fit_intercept):\n+def test_sparse_input(sparse_container, solver, fit_intercept, global_random_seed):\n     \"\"\"Test that sparse and dense X give same results.\"\"\"\n-    X, y = make_regression(n_samples=100, n_features=20, random_state=1, noise=1.0)\n+    n_informative = 10\n+    quantile_level = 0.6\n+    X, y = make_regression(\n+        n_samples=300,\n+        n_features=20,\n+        n_informative=10,\n+        random_state=global_random_seed,\n+        noise=1.0,\n+    )\n     X_sparse = sparse_container(X)\n-    alpha = 1e-4\n-    quant_dense = QuantileRegressor(alpha=alpha, fit_intercept=fit_intercept).fit(X, y)\n+    alpha = 0.1\n+    quant_dense = QuantileRegressor(\n+        quantile=quantile_level, alpha=alpha, fit_intercept=fit_intercept\n+    ).fit(X, y)\n     quant_sparse = QuantileRegressor(\n-        alpha=alpha, fit_intercept=fit_intercept, solver=solver\n+        quantile=quantile_level, alpha=alpha, fit_intercept=fit_intercept, solver=solver\n     ).fit(X_sparse, y)\n     assert_allclose(quant_sparse.coef_, quant_dense.coef_, rtol=1e-2)\n+    sparse_support = quant_sparse.coef_ != 0\n+    dense_support = quant_dense.coef_ != 0\n+    assert dense_support.sum() == pytest.approx(n_informative, abs=1)\n+    assert sparse_support.sum() == pytest.approx(n_informative, abs=1)\n     if fit_intercept:\n         assert quant_sparse.intercept_ == approx(quant_dense.intercept_)\n         # check that we still predict fraction\n-        assert 0.45 <= np.mean(y < quant_sparse.predict(X_sparse)) <= 0.57\n+        empirical_coverage = np.mean(y < quant_sparse.predict(X_sparse))\n+        assert empirical_coverage == approx(quantile_level, abs=3e-2)\n \n \n def test_error_interior_point_future(X_y_data, monkeypatch):\n",
+  "fail_to_pass": [
+    "test_sparse_input"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/linear_model/tests/test_quantile.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2024-10-28T10:01:37Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/30168",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/30162"
+}

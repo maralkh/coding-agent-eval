@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-31431",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "36ef203a8b1cbd5792e76a850b7f3f3c976f1987",
+  "issue_number": 31374,
+  "issue_title": "Suggested fix: GaussianProcessRegressor.predict wastes significant time when both `return_std` and `return_cov` are `False`",
+  "issue_body": "### Describe the workflow you want to enable\n\nhttps://github.com/scikit-learn/scikit-learn/commit/7b715111bff01e836fcd3413851381c6a1057ca4 moved duplicated code above the conditional statements, but this means that an expensive step for computing GPR variances is executed even if both `return_std` and `return_cov` are `False`. Profiling shows this takes ~96% of the computation time. I would like to see the `y_mean` value returned before this step to save time.\n\n### Describe your proposed solution\n\nAbove `V = solve_triangular` https://github.com/scikit-learn/scikit-learn/blob/main/sklearn/gaussian_process/_gpr.py#L454, add\n\n```\nif not return_std and not return_cov:\n    return y_mean\n```\n\n### Describe alternatives you've considered, if relevant\n\n_No response_\n\n### Additional context\n\n_No response_",
+  "pr_number": 31431,
+  "pr_title": "ENH Make `GaussianProcessRegressor.predict` faster when return_std and return_cov are false",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.gaussian_process/31431.efficiency.rst b/doc/whats_new/upcoming_changes/sklearn.gaussian_process/31431.efficiency.rst\nnew file mode 100644\nindex 0000000000000..798f2ebb6bd2f\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.gaussian_process/31431.efficiency.rst\n@@ -0,0 +1,3 @@\n+- make :class:`GaussianProcessRegressor.predict` faster when `return_cov` and\n+  `return_std` are both `False`.\n+  By :user:`Rafael Ayll\u00f3n Gavil\u00e1n <RafaAyGar>`.\ndiff --git a/sklearn/gaussian_process/_gpr.py b/sklearn/gaussian_process/_gpr.py\nindex d56e7735be787..5f684a84933df 100644\n--- a/sklearn/gaussian_process/_gpr.py\n+++ b/sklearn/gaussian_process/_gpr.py\n@@ -450,6 +450,9 @@ def predict(self, X, return_std=False, return_cov=False):\n             if y_mean.ndim > 1 and y_mean.shape[1] == 1:\n                 y_mean = np.squeeze(y_mean, axis=1)\n \n+            if not return_cov and not return_std:\n+                return y_mean\n+\n             # Alg 2.1, page 19, line 5 -> v = L \\ K(X_test, X_train)^T\n             V = solve_triangular(\n                 self.L_, K_trans.T, lower=GPR_CHOLESKY_LOWER, check_finite=False\n@@ -467,7 +470,7 @@ def predict(self, X, return_std=False, return_cov=False):\n                     y_cov = np.squeeze(y_cov, axis=2)\n \n                 return y_mean, y_cov\n-            elif return_std:\n+            else:  # return_std\n                 # Compute variance of predictive distribution\n                 # Use einsum to avoid explicitly forming the large matrix\n                 # V^T @ V just to extract its diagonal afterward.\n@@ -492,8 +495,6 @@ def predict(self, X, return_std=False, return_cov=False):\n                     y_var = np.squeeze(y_var, axis=1)\n \n                 return y_mean, np.sqrt(y_var)\n-            else:\n-                return y_mean\n \n     def sample_y(self, X, n_samples=1, random_state=0):\n         \"\"\"Draw samples from Gaussian process and evaluate at X.\ndiff --git a/sklearn/gaussian_process/tests/test_gpr.py b/sklearn/gaussian_process/tests/test_gpr.py\nindex f43cc3613b3ff..3c841c479a8bd 100644\n--- a/sklearn/gaussian_process/tests/test_gpr.py\n+++ b/sklearn/gaussian_process/tests/test_gpr.py\n@@ -847,3 +847,15 @@ def test_gpr_predict_input_not_modified():\n     _, _ = gpr.predict(X2, return_std=True)\n \n     assert_allclose(X2, X2_copy)\n+\n+\n+@pytest.mark.parametrize(\"kernel\", kernels)\n+def test_gpr_predict_no_cov_no_std_return(kernel):\n+    \"\"\"\n+    Check that only y_mean is returned when return_cov=False and\n+    return_std=False.\n+    \"\"\"\n+    gpr = GaussianProcessRegressor(kernel=kernel).fit(X, y)\n+    y_pred = gpr.predict(X, return_cov=False, return_std=False)\n+\n+    assert_allclose(y_pred, y)\n",
+  "fail_to_pass": [
+    "test_gpr_predict_no_cov_no_std_return"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/gaussian_process/_gpr.py",
+    "sklearn/gaussian_process/tests/test_gpr.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-05-26T13:43:56Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31431",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/31374"
+}

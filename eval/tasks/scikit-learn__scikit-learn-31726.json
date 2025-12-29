@@ -1,0 +1,20 @@
+{
+  "id": "scikit-learn__scikit-learn-31726",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "0872e9ae5612f31a80d213dd93441dfc3c8fee5e",
+  "issue_number": 31701,
+  "issue_title": "MNT Add `_check_sample_weights` to classification metrics",
+  "issue_body": "\r\n#### Reference Issues/PRs\r\n\r\nFollow up to #30886\r\n\r\n#### What does this implement/fix? Explain your changes.\r\n\r\n* perform `check_consistent_length` on `y_true`, `y_prob` and `sample_weights` in `_check_targets` - this avoids the second `check_consistent_length`, which means that all length checks occur at the start and you know who is raising errors (note this is not about avoiding the double checking, as they are not expensive checks)\r\n* adds `_check_sample_weight` to `_check_targets`, `_validate_multiclass_probabilistic_prediction` and `_validate_binary_probabilistic_prediction` - I am not 100% sure on this. Currently this check is only being done in `d2_log_loss_score`. This check does the following:\r\n   * ensures all values are finite\r\n   * ensure not complex data (i.e. converts `ComplexWarning` to error, though not sure if this warning is only raised for numpy arrays or other array API arrays)\r\n   * ensure `array.ndim` not greater than 3\r\n   \r\nThis seems like reasonable checks to have. The only *potential* downside is that these checks would take a bit more time, but I don't think this is really a problem.\r\n\r\ncc @ogrisel \r\n\r\n#### Any other comments?\r\n\r\n\r\n<!--\r\nPlease be aware that we are a loose team of volunteers so patience is\r\nnecessary; assistance handling other issues is very welcome. We value\r\nall user contributions, no matter how minor they are. If we are slow to\r\nreview, either the pull request needs some benchmarking, tinkering,\r\nconvincing, etc. or more likely the reviewers are simply busy. In either\r\ncase, we ask for your understanding during the review process.\r\nFor more information, see our FAQ on this topic:\r\nhttps://scikit-learn.org/dev/faq.html#why-is-my-pull-request-not-getting-any-attention.\r\n\r\nThanks for contributing!\r\n-->\r\n",
+  "pr_number": 31726,
+  "pr_title": "MNT Add more sample weight checks in regression metric common tests",
+  "gold_patch": "diff --git a/sklearn/metrics/tests/test_common.py b/sklearn/metrics/tests/test_common.py\nindex 74bdb46d8258f..5cdc2ead54740 100644\n--- a/sklearn/metrics/tests/test_common.py\n+++ b/sklearn/metrics/tests/test_common.py\n@@ -1614,6 +1614,19 @@ def test_regression_with_invalid_sample_weight(name):\n     with pytest.raises(ValueError, match=\"Found input variables with inconsistent\"):\n         metric(y_true, y_pred, sample_weight=sample_weight)\n \n+    sample_weight = random_state.random_sample(size=(n_samples,))\n+    sample_weight[0] = np.inf\n+    with pytest.raises(ValueError, match=\"Input sample_weight contains infinity\"):\n+        metric(y_true, y_pred, sample_weight=sample_weight)\n+\n+    sample_weight[0] = np.nan\n+    with pytest.raises(ValueError, match=\"Input sample_weight contains NaN\"):\n+        metric(y_true, y_pred, sample_weight=sample_weight)\n+\n+    sample_weight = np.array([1 + 2j, 3 + 4j, 5 + 7j])\n+    with pytest.raises(ValueError, match=\"Complex data not supported\"):\n+        metric(y_true[:3], y_pred[:3], sample_weight=sample_weight)\n+\n     sample_weight = random_state.random_sample(size=(n_samples * 2,)).reshape(\n         (n_samples, 2)\n     )\n",
+  "fail_to_pass": [],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/metrics/tests/test_common.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-07-09T04:58:11Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31726",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/31701"
+}

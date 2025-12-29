@@ -1,0 +1,23 @@
+{
+  "id": "scikit-learn__scikit-learn-32258",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "c3506f5177ccf36614b4e5930aad81e8f6a8ba7f",
+  "issue_number": 31533,
+  "issue_title": "RFC: stop using scikit-learn `stable_cumsum` and instead use `np.cumsum/xp.cumulative_sum` directly",
+  "issue_body": "As discussed in https://github.com/scikit-learn/scikit-learn/pull/30878/files#r2142562746, our current `stable_cumsum` function brings very little value to the user: it does extra computation to check that `np.allclose(np.sum(x), np.cumsum(x)[-1])` and raises a warning otherwise. However, in most cases, users can do nothing about the warning.\n\nFurthermore, as seen in the CI of #30878, the array API compatible libraries we test against do not have the same numerical stability behavior for `sum` and `cumsum`, so it makes it challenging to write a test for the occurrence of this warning that is consistent across libraries.\n\nSo I would rather not waste the overhead of computing `np.sum(x)` and just always directly call `np.cumsum` or `xp.cumsum` and deprecate `sklearn.utils.extmath.stable_cumsum`.\n\n",
+  "pr_number": 32258,
+  "pr_title": "FIX deprecate `stable_cumsum`",
+  "gold_patch": "diff --git a/doc/whats_new/upcoming_changes/sklearn.utils/32258.api.rst b/doc/whats_new/upcoming_changes/sklearn.utils/32258.api.rst\nnew file mode 100644\nindex 0000000000000..0684521c6bf3f\n--- /dev/null\n+++ b/doc/whats_new/upcoming_changes/sklearn.utils/32258.api.rst\n@@ -0,0 +1,3 @@\n+- :function:`utils.extmath.stable_cumsum` is deprecated and will be removed\n+  in v1.10. Use `np.cumulative_sum` with the desired dtype directly instead.\n+  By :user:`Tiziano Zito <opossumnano>` :pr:`32258`.\ndiff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py\nindex f4c4d745e5a2d..34fe2ba09006c 100644\n--- a/sklearn/utils/extmath.py\n+++ b/sklearn/utils/extmath.py\n@@ -23,6 +23,7 @@\n     get_namespace_and_device,\n )\n from sklearn.utils._param_validation import Interval, StrOptions, validate_params\n+from sklearn.utils.deprecation import deprecated\n from sklearn.utils.sparsefuncs import sparse_matmul_to_dense\n from sklearn.utils.sparsefuncs_fast import csr_row_norms\n from sklearn.utils.validation import check_array, check_random_state\n@@ -1281,9 +1282,19 @@ def _deterministic_vector_sign_flip(u):\n     return u\n \n \n+# TODO(1.10): Remove\n+@deprecated(\n+    \"`sklearn.utils.extmath.stable_cumsum` is deprecated in version 1.8 and \"\n+    \"will be removed in 1.10. Use `np.cumulative_sum` with the desired dtype \"\n+    \"directly instead.\"\n+)\n def stable_cumsum(arr, axis=None, rtol=1e-05, atol=1e-08):\n     \"\"\"Use high precision for cumsum and check that final value matches sum.\n \n+    .. deprecated:: 1.8\n+        This function is deprecated in version 1.8 and will be removed in 1.10.\n+        Use `np.cumulative_sum` with the desired dtype directly instead.\n+\n     Warns if the final cumulative sum does not match the sum (up to the chosen\n     tolerance).\n \ndiff --git a/sklearn/utils/tests/test_extmath.py b/sklearn/utils/tests/test_extmath.py\nindex 7d0dba5f83907..5f3627972346f 100644\n--- a/sklearn/utils/tests/test_extmath.py\n+++ b/sklearn/utils/tests/test_extmath.py\n@@ -996,17 +996,9 @@ def test_softmax():\n     assert_array_almost_equal(softmax(X), exp_X / sum_exp_X)\n \n \n-def test_stable_cumsum():\n-    assert_array_equal(stable_cumsum([1, 2, 3]), np.cumsum([1, 2, 3]))\n-    r = np.random.RandomState(0).rand(100000)\n-    with pytest.warns(RuntimeWarning):\n-        stable_cumsum(r, rtol=0, atol=0)\n-\n-    # test axis parameter\n-    A = np.random.RandomState(36).randint(1000, size=(5, 5, 5))\n-    assert_array_equal(stable_cumsum(A, axis=0), np.cumsum(A, axis=0))\n-    assert_array_equal(stable_cumsum(A, axis=1), np.cumsum(A, axis=1))\n-    assert_array_equal(stable_cumsum(A, axis=2), np.cumsum(A, axis=2))\n+def test_stable_cumsum_deprecation():\n+    with pytest.warns(FutureWarning, match=\"stable_cumsum.+is deprecated\"):\n+        stable_cumsum([1, 2, 3])\n \n \n @pytest.mark.parametrize(\n",
+  "fail_to_pass": [
+    "test_stable_cumsum_deprecation"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/utils/extmath.py",
+    "sklearn/utils/tests/test_extmath.py"
+  ],
+  "difficulty": "medium",
+  "created_at": "2025-09-23T15:26:20Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/32258",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/issues/31533"
+}

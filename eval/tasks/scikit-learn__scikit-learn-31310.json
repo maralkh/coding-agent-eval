@@ -1,0 +1,26 @@
+{
+  "id": "scikit-learn__scikit-learn-31310",
+  "repo": "scikit-learn/scikit-learn",
+  "base_commit": "2d78745ba8b88c07c63a42381c0ab41d798ac04b",
+  "issue_number": 1234,
+  "issue_title": "MRG fix bincount mess I made in kmeans.",
+  "issue_body": "This should clean up the stuff I pushed earlier.\ncc @ogrisel @gaelvaroquaux Could you have a brief look? What I pushed earlier is buggy but I didn't dare push again after so many failed fixes.\n",
+  "pr_number": 31310,
+  "pr_title": "TST use global_random_seed in sklearn/feature_extraction/tests/test_image.py",
+  "gold_patch": "diff --git a/sklearn/feature_extraction/tests/test_image.py b/sklearn/feature_extraction/tests/test_image.py\nindex 2edf1a22d676a..cb490fcd576ee 100644\n--- a/sklearn/feature_extraction/tests/test_image.py\n+++ b/sklearn/feature_extraction/tests/test_image.py\n@@ -223,13 +223,15 @@ def test_reconstruct_patches_perfect_color(orange_face):\n     np.testing.assert_array_almost_equal(face, face_reconstructed)\n \n \n-def test_patch_extractor_fit(downsampled_face_collection):\n+def test_patch_extractor_fit(downsampled_face_collection, global_random_seed):\n     faces = downsampled_face_collection\n-    extr = PatchExtractor(patch_size=(8, 8), max_patches=100, random_state=0)\n+    extr = PatchExtractor(\n+        patch_size=(8, 8), max_patches=100, random_state=global_random_seed\n+    )\n     assert extr == extr.fit(faces)\n \n \n-def test_patch_extractor_max_patches(downsampled_face_collection):\n+def test_patch_extractor_max_patches(downsampled_face_collection, global_random_seed):\n     faces = downsampled_face_collection\n     i_h, i_w = faces.shape[1:3]\n     p_h, p_w = 8, 8\n@@ -237,7 +239,7 @@ def test_patch_extractor_max_patches(downsampled_face_collection):\n     max_patches = 100\n     expected_n_patches = len(faces) * max_patches\n     extr = PatchExtractor(\n-        patch_size=(p_h, p_w), max_patches=max_patches, random_state=0\n+        patch_size=(p_h, p_w), max_patches=max_patches, random_state=global_random_seed\n     )\n     patches = extr.transform(faces)\n     assert patches.shape == (expected_n_patches, p_h, p_w)\n@@ -247,35 +249,37 @@ def test_patch_extractor_max_patches(downsampled_face_collection):\n         (i_h - p_h + 1) * (i_w - p_w + 1) * max_patches\n     )\n     extr = PatchExtractor(\n-        patch_size=(p_h, p_w), max_patches=max_patches, random_state=0\n+        patch_size=(p_h, p_w), max_patches=max_patches, random_state=global_random_seed\n     )\n     patches = extr.transform(faces)\n     assert patches.shape == (expected_n_patches, p_h, p_w)\n \n \n-def test_patch_extractor_max_patches_default(downsampled_face_collection):\n+def test_patch_extractor_max_patches_default(\n+    downsampled_face_collection, global_random_seed\n+):\n     faces = downsampled_face_collection\n-    extr = PatchExtractor(max_patches=100, random_state=0)\n+    extr = PatchExtractor(max_patches=100, random_state=global_random_seed)\n     patches = extr.transform(faces)\n     assert patches.shape == (len(faces) * 100, 19, 25)\n \n \n-def test_patch_extractor_all_patches(downsampled_face_collection):\n+def test_patch_extractor_all_patches(downsampled_face_collection, global_random_seed):\n     faces = downsampled_face_collection\n     i_h, i_w = faces.shape[1:3]\n     p_h, p_w = 8, 8\n     expected_n_patches = len(faces) * (i_h - p_h + 1) * (i_w - p_w + 1)\n-    extr = PatchExtractor(patch_size=(p_h, p_w), random_state=0)\n+    extr = PatchExtractor(patch_size=(p_h, p_w), random_state=global_random_seed)\n     patches = extr.transform(faces)\n     assert patches.shape == (expected_n_patches, p_h, p_w)\n \n \n-def test_patch_extractor_color(orange_face):\n+def test_patch_extractor_color(orange_face, global_random_seed):\n     faces = _make_images(orange_face)\n     i_h, i_w = faces.shape[1:3]\n     p_h, p_w = 8, 8\n     expected_n_patches = len(faces) * (i_h - p_h + 1) * (i_w - p_w + 1)\n-    extr = PatchExtractor(patch_size=(p_h, p_w), random_state=0)\n+    extr = PatchExtractor(patch_size=(p_h, p_w), random_state=global_random_seed)\n     patches = extr.transform(faces)\n     assert patches.shape == (expected_n_patches, p_h, p_w, 3)\n \n",
+  "fail_to_pass": [
+    "test_patch_extractor_fit",
+    "test_patch_extractor_max_patches",
+    "test_patch_extractor_max_patches_default",
+    "test_patch_extractor_all_patches",
+    "test_patch_extractor_color"
+  ],
+  "pass_to_pass": [],
+  "relevant_files": [
+    "sklearn/feature_extraction/tests/test_image.py"
+  ],
+  "difficulty": "easy",
+  "created_at": "2025-05-05T19:19:41Z",
+  "pr_url": "https://github.com/scikit-learn/scikit-learn/pull/31310",
+  "issue_url": "https://github.com/scikit-learn/scikit-learn/pull/1234"
+}
