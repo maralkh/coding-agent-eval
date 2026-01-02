@@ -1,0 +1,241 @@
+{
+  "config": {
+    "classifier_type": "random_forest",
+    "n_samples": 208,
+    "n_features": 49,
+    "positive_rate": 0.18269230769230768
+  },
+  "cross_validation": {
+    "accuracy": {
+      "mean": 0.9616724738675959,
+      "std": 0.04421259711501812
+    },
+    "f1": {
+      "mean": 0.8866666666666665,
+      "std": 0.12578641509408808
+    },
+    "precision": {
+      "mean": 0.9428571428571428,
+      "std": 0.11428571428571428
+    },
+    "recall": {
+      "mean": 0.8428571428571429,
+      "std": 0.15127013274676693
+    }
+  },
+  "confusion_matrix": [
+    [
+      168,
+      2
+    ],
+    [
+      6,
+      32
+    ]
+  ],
+  "feature_importance": [
+    {
+      "feature": "fail_tool_errors_occurred",
+      "importance": 0.3098840556679051
+    },
+    {
+      "feature": "conv_progress_volatility",
+      "importance": 0.08668957416551591
+    },
+    {
+      "feature": "patch_lines_added",
+      "importance": 0.07540452924124494
+    },
+    {
+      "feature": "fail_no_changes_made",
+      "importance": 0.056741670931512826
+    },
+    {
+      "feature": "fail_wrong_files_modified",
+      "importance": 0.03555233170440902
+    },
+    {
+      "feature": "phase_implementation_steps",
+      "importance": 0.033930084694071785
+    },
+    {
+      "feature": "patch_lines_removed",
+      "importance": 0.032683183137798354
+    },
+    {
+      "feature": "trajectory_efficiency",
+      "importance": 0.031930179186484775
+    },
+    {
+      "feature": "error_recovered_errors",
+      "importance": 0.027990749360623846
+    },
+    {
+      "feature": "tool_used_str_replace",
+      "importance": 0.027387544378309675
+    },
+    {
+      "feature": "fail_agent_submitted",
+      "importance": 0.02592649844266361
+    },
+    {
+      "feature": "error_total_errors",
+      "importance": 0.02399665072361373
+    },
+    {
+      "feature": "error_recovery_rate",
+      "importance": 0.02374076096202349
+    },
+    {
+      "feature": "phase_exploration_steps",
+      "importance": 0.02265516117282055
+    },
+    {
+      "feature": "agent_success",
+      "importance": 0.018226496824270567
+    },
+    {
+      "feature": "phase_exploration_pct",
+      "importance": 0.017211095521050622
+    },
+    {
+      "feature": "tool_submitted",
+      "importance": 0.015729283059629926
+    },
+    {
+      "feature": "exploration_efficiency",
+      "importance": 0.015697876530152477
+    },
+    {
+      "feature": "phase_phase_transitions",
+      "importance": 0.014534394470656646
+    },
+    {
+      "feature": "tool_total_calls",
+      "importance": 0.01406520584402942
+    },
+    {
+      "feature": "traj_length",
+      "importance": 0.013920469621599851
+    },
+    {
+      "feature": "agent_steps",
+      "importance": 0.009902173448597618
+    },
+    {
+      "feature": "traj_unnecessary_steps",
+      "importance": 0.009889836335417504
+    },
+    {
+      "feature": "explore_files_explored",
+      "importance": 0.008989311856628966
+    },
+    {
+      "feature": "explore_relevant_file_discovery_step",
+      "importance": 0.005527832515724099
+    },
+    {
+      "feature": "explore_directories_explored",
+      "importance": 0.004834017666464729
+    },
+    {
+      "feature": "traj_optimal_length",
+      "importance": 0.004507440582161152
+    },
+    {
+      "feature": "error_max_repetition",
+      "importance": 0.004411522593262298
+    },
+    {
+      "feature": "explore_wasted_explorations",
+      "importance": 0.0036193609188418883
+    },
+    {
+      "feature": "phase_verification_steps",
+      "importance": 0.0033821860209839005
+    },
+    {
+      "feature": "reasoning_score",
+      "importance": 0.003101337388487168
+    },
+    {
+      "feature": "conv_monotonic_progress",
+      "importance": 0.0030875683985861716
+    },
+    {
+      "feature": "reasoning_mentions_issue_keywords",
+      "importance": 0.0022966076259098548
+    },
+    {
+      "feature": "reasoning_verifies_after_change",
+      "importance": 0.00224020374567569
+    },
+    {
+      "feature": "reasoning_mentions_relevant_files",
+      "importance": 0.0018375379034246766
+    },
+    {
+      "feature": "phase_followed_test_after_change",
+      "importance": 0.001818014842591066
+    },
+    {
+      "feature": "reasoning_explains_changes",
+      "importance": 0.0014390786098957469
+    },
+    {
+      "feature": "reasoning_has_explicit_reasoning",
+      "importance": 0.0013070223660967735
+    },
+    {
+      "feature": "tool_ran_tests",
+      "importance": 0.0011227753537117234
+    },
+    {
+      "feature": "fail_model_got_stuck",
+      "importance": 0.0008495354624051497
+    },
+    {
+      "feature": "tool_read_relevant_files",
+      "importance": 0.0007061591327591314
+    },
+    {
+      "feature": "patch_patch_too_large",
+      "importance": 0.0005141999072639428
+    },
+    {
+      "feature": "reasoning_hypothesizes_before_acting",
+      "importance": 0.0003909097952638616
+    },
+    {
+      "feature": "fail_hit_max_steps",
+      "importance": 0.00032757188945967136
+    },
+    {
+      "feature": "error_stuck_episodes",
+      "importance": 1.5181754273863843e-16
+    },
+    {
+      "feature": "conv_had_regression",
+      "importance": 5.490669130127534e-17
+    },
+    {
+      "feature": "tool_used_write_file",
+      "importance": 0.0
+    },
+    {
+      "feature": "phase_followed_read_before_write",
+      "importance": 0.0
+    },
+    {
+      "feature": "error_max_stuck_duration",
+      "importance": 0.0
+    }
+  ],
+  "test_metrics": {
+    "accuracy": 0.9761904761904762,
+    "precision": 1.0,
+    "recall": 0.875,
+    "f1": 0.9333333333333333,
+    "roc_auc": 1.0
+  }
+}

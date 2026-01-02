@@ -3,24 +3,23 @@
 Train a classifier to predict agent success from behavioral metrics.
 
 This classifier learns to predict whether an agent will successfully resolve
-a task based on metrics like reasoning quality, exploration efficiency,
-tool usage patterns, etc.
+a task based on metrics collected from benchmark runs.
 
 Usage:
-    # Train classifier
-    python train_classifier.py --data training_data/training_data.jsonl
+    # Train from benchmark result JSON files
+    python train_classifier.py --data results/benchmark/runs/
     
     # Train with specific model type
-    python train_classifier.py --data training_data/ --classifier random_forest
+    python train_classifier.py --data results/ --classifier random_forest
     
     # Evaluate only (no training)
-    python train_classifier.py --data training_data/ --evaluate-only
+    python train_classifier.py --data results/ --evaluate-only
     
     # Show feature importance
-    python train_classifier.py --data training_data/ --show-importance
+    python train_classifier.py --data results/ --show-correlations
     
     # Use trained model for prediction
-    python train_classifier.py --predict --model models/classifier.joblib --metrics metrics.json
+    python train_classifier.py --predict --model models/classifier.joblib --metrics result.json
 """
 
 import argparse
@@ -37,87 +36,109 @@ warnings.filterwarnings("ignore")
 import numpy as np
 
 
-# Feature definitions - these map to TrainingExample attributes
-FEATURE_COLUMNS = [
-    # Reasoning features
-    "reasoning_quality_score",
+# =============================================================================
+# FEATURE DEFINITIONS
+# =============================================================================
+
+# Features extracted from metrics.core
+CORE_FEATURES = [
+    "similarity_score",
+    "reasoning_score",
+    "exploration_efficiency",
+    "trajectory_efficiency",
+]
+
+# Features extracted from metrics.detailed.tool_usage
+TOOL_USAGE_FEATURES = [
+    "total_calls",
+    "read_relevant_files",
+    "used_str_replace",
+    "used_write_file",
+    "ran_tests",
+    "submitted",
+]
+
+# Features extracted from metrics.detailed.patch_quality
+PATCH_QUALITY_FEATURES = [
+    "correct_files_touched",
+    "lines_added",
+    "lines_removed",
+    "patch_too_large",
+]
+
+# Features extracted from metrics.detailed.reasoning
+REASONING_FEATURES = [
     "has_explicit_reasoning",
     "mentions_issue_keywords",
     "mentions_relevant_files",
     "hypothesizes_before_acting",
     "explains_changes",
     "verifies_after_change",
-    
-    # Phase features
+]
+
+# Features extracted from metrics.detailed.phases
+PHASE_FEATURES = [
     "exploration_steps",
     "implementation_steps",
     "verification_steps",
     "exploration_pct",
-    "implementation_pct",
-    "verification_pct",
     "phase_transitions",
     "followed_read_before_write",
     "followed_test_after_change",
-    
-    # Exploration features
+]
+
+# Features extracted from metrics.detailed.exploration
+EXPLORATION_FEATURES = [
     "files_explored",
     "directories_explored",
     "relevant_file_discovery_step",
-    "exploration_efficiency",
     "wasted_explorations",
-    "search_to_read_ratio",
-    
-    # Trajectory features
-    "trajectory_length",
+]
+
+# Features extracted from metrics.detailed.trajectory
+TRAJECTORY_FEATURES = [
+    "length",
     "optimal_length",
-    "trajectory_efficiency",
     "unnecessary_steps",
-    
-    # Convergence features
+]
+
+# Features extracted from metrics.detailed.convergence
+CONVERGENCE_FEATURES = [
     "final_similarity",
     "max_progress",
     "converged",
     "monotonic_progress",
     "had_regression",
     "progress_volatility",
-    
-    # Error recovery features
+]
+
+# Features extracted from metrics.detailed.error_recovery
+ERROR_RECOVERY_FEATURES = [
     "total_errors",
     "recovered_errors",
     "recovery_rate",
     "max_repetition",
     "stuck_episodes",
     "max_stuck_duration",
-    
-    # Tool usage features
-    "total_tool_calls",
-    "read_relevant_files",
-    "used_str_replace",
-    "used_write_file",
-    "ran_tests",
-    "submitted",
-    "tool_errors_count",
-    
-    # Patch quality features (careful - some leak target info)
-    "correct_files_touched",
-    # "patch_similarity",  # This is very correlated with target, might leak
-    # "line_level_similarity",  # Same issue
-    "lines_added",
-    "lines_removed",
-    "patch_too_large",
-    
-    # Derived features
-    "steps_per_file",
-    "edit_to_explore_ratio",
+]
+
+# Features extracted from metrics.detailed.failure_analysis
+FAILURE_ANALYSIS_FEATURES = [
+    "hit_max_steps",
+    "agent_submitted",
+    "no_changes_made",
+    "wrong_files_modified",
+    "tool_errors_occurred",
+    "model_got_stuck",
 ]
 
 # Features that might leak target information (use with caution)
 LEAKY_FEATURES = [
-    "patch_similarity",
-    "line_level_similarity",
+    "similarity_score",
     "final_similarity",
     "max_progress",
     "converged",
+    "correct_files_touched",
 ]
 
 
@@ -132,70 +153,158 @@ class ClassifierConfig:
     random_state: int = 42
 
 
-def load_training_data(data_path: str) -> list[dict]:
-    """Load training examples from JSONL file."""
+def load_benchmark_results(data_path: str) -> list[dict]:
+    """
+    Load benchmark result JSON files from a directory.
+    
+    Supports:
+    - Directory containing individual JSON files (one per run)
+    - Single JSON file with nested results
+    - JSONL file with one result per line
+    """
     path = Path(data_path)
+    results = []
     
-    # Handle directory or file
-    if path.is_dir():
-        data_file = path / "training_data.jsonl"
+    if path.is_file():
+        if path.suffix == ".jsonl":
+            # JSONL format
+            with open(path) as f:
+                for line in f:
+                    try:
+                        results.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        else:
+            # Single JSON file
+            with open(path) as f:
+                data = json.load(f)
+                # Check if it's a single result or contains multiple
+                if "metrics" in data and "evaluation" in data:
+                    results.append(data)
+                elif "results" in data:
+                    # Nested results format
+                    results.extend(data["results"])
     else:
-        data_file = path
-    
-    if not data_file.exists():
-        raise FileNotFoundError(f"Training data not found: {data_file}")
-    
-    examples = []
-    with open(data_file) as f:
-        for line in f:
+        # Directory of JSON files
+        for json_file in sorted(path.glob("**/*.json")):
             try:
-                examples.append(json.loads(line))
-            except json.JSONDecodeError:
+                with open(json_file) as f:
+                    data = json.load(f)
+                    if "metrics" in data and "evaluation" in data:
+                        results.append(data)
+            except (json.JSONDecodeError, KeyError):
                 continue
     
-    return examples
+    return results
 
 
-def extract_features(examples: list[dict], config: ClassifierConfig) -> tuple:
+def extract_feature_value(data: dict, path: str, default=0):
+    """Extract a value from nested dict using dot notation path."""
+    keys = path.split(".")
+    value = data
+    try:
+        for key in keys:
+            value = value[key]
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return int(value)
+        return float(value)
+    except (KeyError, TypeError):
+        return default
+
+
+def extract_features(results: list[dict], config: ClassifierConfig) -> tuple:
     """
-    Extract feature matrix X and labels y from examples.
+    Extract feature matrix X and labels y from benchmark results.
     
     Returns:
         X: numpy array of shape (n_samples, n_features)
         y: numpy array of shape (n_samples,)
         feature_names: list of feature names
+        feature_map: dict mapping feature names to JSON paths
     """
-    # Determine which features to use
-    feature_names = FEATURE_COLUMNS.copy()
-    if config.use_leaky_features:
-        feature_names.extend(LEAKY_FEATURES)
+    # Build feature mapping: feature_name -> path in JSON
+    feature_map = {}
+    
+    # Core features
+    for feat in CORE_FEATURES:
+        feature_map[feat] = f"metrics.core.{feat}"
+    
+    # Tool usage features
+    for feat in TOOL_USAGE_FEATURES:
+        feature_map[f"tool_{feat}"] = f"metrics.detailed.tool_usage.{feat}"
+    
+    # Patch quality features
+    for feat in PATCH_QUALITY_FEATURES:
+        feature_map[f"patch_{feat}"] = f"metrics.detailed.patch_quality.{feat}"
+    
+    # Reasoning features
+    for feat in REASONING_FEATURES:
+        feature_map[f"reasoning_{feat}"] = f"metrics.detailed.reasoning.{feat}"
+    
+    # Phase features
+    for feat in PHASE_FEATURES:
+        feature_map[f"phase_{feat}"] = f"metrics.detailed.phases.{feat}"
+    
+    # Exploration features
+    for feat in EXPLORATION_FEATURES:
+        feature_map[f"explore_{feat}"] = f"metrics.detailed.exploration.{feat}"
+    
+    # Trajectory features
+    for feat in TRAJECTORY_FEATURES:
+        feature_map[f"traj_{feat}"] = f"metrics.detailed.trajectory.{feat}"
+    
+    # Convergence features
+    for feat in CONVERGENCE_FEATURES:
+        feature_map[f"conv_{feat}"] = f"metrics.detailed.convergence.{feat}"
+    
+    # Error recovery features
+    for feat in ERROR_RECOVERY_FEATURES:
+        feature_map[f"error_{feat}"] = f"metrics.detailed.error_recovery.{feat}"
+    
+    # Failure analysis features
+    for feat in FAILURE_ANALYSIS_FEATURES:
+        feature_map[f"fail_{feat}"] = f"metrics.detailed.failure_analysis.{feat}"
+    
+    # Add agent-level features
+    feature_map["agent_steps"] = "agent.steps"
+    feature_map["agent_success"] = "agent.success"
+    
+    # Filter out leaky features if requested
+    if not config.use_leaky_features:
+        leaky_set = set(LEAKY_FEATURES)
+        feature_map = {k: v for k, v in feature_map.items() 
+                      if not any(leak in v for leak in leaky_set)}
+    
+    feature_names = list(feature_map.keys())
     
     X = []
     y = []
     
-    for ex in examples:
+    for result in results:
+        # Extract label
+        resolved = result.get("evaluation", {}).get("resolved", False)
+        
         # Extract features
         features = []
-        for feat in feature_names:
-            value = ex.get(feat, 0)
-            # Convert bools to int
-            if isinstance(value, bool):
-                value = int(value)
-            # Handle missing/None
-            if value is None:
-                value = 0
+        for feat_name in feature_names:
+            path = feature_map[feat_name]
+            value = extract_feature_value(result, path)
+            
             # Handle special cases
-            if feat == "relevant_file_discovery_step" and value == -1:
+            if "discovery_step" in feat_name and value == -1:
                 value = 100  # Large value for "never found"
-            features.append(float(value))
+            
+            features.append(value)
         
         X.append(features)
-        y.append(int(ex.get("resolved", False)))
+        y.append(int(resolved))
     
     X = np.array(X)
     y = np.array(y)
     
-    return X, y, feature_names
+    return X, y, feature_names, feature_map
 
 
 def create_classifier(config: ClassifierConfig):
@@ -324,11 +433,20 @@ def train_and_evaluate(
     }
     
     # ROC AUC if we have probabilities
+    y_prob = None
     if hasattr(clf_final, "predict_proba"):
         y_prob = clf_final.predict_proba(X_test)[:, 1]
         results["test_metrics"]["roc_auc"] = float(roc_auc_score(y_test, y_prob))
     
-    return results, clf, scaler
+    # Store test data for visualization
+    test_data = {
+        "X_test": X_test,
+        "y_test": y_test,
+        "y_pred": y_pred,
+        "y_prob": y_prob,
+    }
+    
+    return results, clf, scaler, test_data
 
 
 def print_results(results: dict) -> None:
@@ -386,7 +504,491 @@ def print_results(results: dict) -> None:
     print()
 
 
-def save_model(clf, scaler, feature_names: list[str], results: dict, output_dir: str) -> Path:
+def generate_visualizations(
+    results: dict,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+    y_prob: np.ndarray,
+    output_dir: Path,
+) -> dict:
+    """Generate visualization plots for classifier results."""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+    except ImportError:
+        print("Warning: matplotlib/seaborn not available, skipping visualizations")
+        return {}
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plot_files = {}
+    
+    # Set style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    colors = ['#2ecc71', '#e74c3c', '#3498db', '#9b59b6', '#f39c12']
+    
+    # 1. Feature Importance Bar Chart
+    fig, ax = plt.subplots(figsize=(10, 8))
+    importance_data = results["feature_importance"][:20]
+    features = [d["feature"] for d in importance_data][::-1]
+    importances = [d["importance"] for d in importance_data][::-1]
+    
+    bars = ax.barh(features, importances, color=colors[2], edgecolor='white', linewidth=0.5)
+    ax.set_xlabel("Importance", fontsize=12)
+    ax.set_title("Top 20 Feature Importances", fontsize=14, fontweight='bold')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Add value labels
+    for bar, val in zip(bars, importances):
+        ax.text(val + 0.005, bar.get_y() + bar.get_height()/2, 
+                f'{val:.3f}', va='center', fontsize=9)
+    
+    plt.tight_layout()
+    plot_file = output_dir / "feature_importance.png"
+    plt.savefig(plot_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    plot_files["feature_importance"] = str(plot_file)
+    
+    # 2. Confusion Matrix Heatmap
+    fig, ax = plt.subplots(figsize=(8, 6))
+    cm = np.array(results["confusion_matrix"])
+    
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                xticklabels=['Predicted\nFailed', 'Predicted\nResolved'],
+                yticklabels=['Actual\nFailed', 'Actual\nResolved'],
+                annot_kws={'size': 16})
+    ax.set_title("Confusion Matrix", fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    plot_file = output_dir / "confusion_matrix.png"
+    plt.savefig(plot_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    plot_files["confusion_matrix"] = str(plot_file)
+    
+    # 3. ROC Curve (if probabilities available)
+    if y_prob is not None:
+        from sklearn.metrics import roc_curve, auc
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        fpr, tpr, _ = roc_curve(y_test, y_prob)
+        roc_auc = auc(fpr, tpr)
+        
+        ax.plot(fpr, tpr, color=colors[2], lw=2, 
+                label=f'ROC curve (AUC = {roc_auc:.3f})')
+        ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--', label='Random')
+        ax.fill_between(fpr, tpr, alpha=0.3, color=colors[2])
+        
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('False Positive Rate', fontsize=12)
+        ax.set_ylabel('True Positive Rate', fontsize=12)
+        ax.set_title('ROC Curve', fontsize=14, fontweight='bold')
+        ax.legend(loc='lower right')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        plt.tight_layout()
+        plot_file = output_dir / "roc_curve.png"
+        plt.savefig(plot_file, dpi=150, bbox_inches='tight')
+        plt.close()
+        plot_files["roc_curve"] = str(plot_file)
+    
+    # 4. Precision-Recall Curve
+    if y_prob is not None:
+        from sklearn.metrics import precision_recall_curve, average_precision_score
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        precision, recall, _ = precision_recall_curve(y_test, y_prob)
+        avg_precision = average_precision_score(y_test, y_prob)
+        
+        ax.plot(recall, precision, color=colors[3], lw=2,
+                label=f'PR curve (AP = {avg_precision:.3f})')
+        ax.fill_between(recall, precision, alpha=0.3, color=colors[3])
+        
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('Recall', fontsize=12)
+        ax.set_ylabel('Precision', fontsize=12)
+        ax.set_title('Precision-Recall Curve', fontsize=14, fontweight='bold')
+        ax.legend(loc='lower left')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        plt.tight_layout()
+        plot_file = output_dir / "precision_recall_curve.png"
+        plt.savefig(plot_file, dpi=150, bbox_inches='tight')
+        plt.close()
+        plot_files["precision_recall"] = str(plot_file)
+    
+    # 5. Cross-validation scores boxplot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    cv_data = results["cross_validation"]
+    metrics = ['accuracy', 'precision', 'recall', 'f1']
+    means = [cv_data[m]['mean'] for m in metrics]
+    stds = [cv_data[m]['std'] for m in metrics]
+    
+    x_pos = np.arange(len(metrics))
+    bars = ax.bar(x_pos, means, yerr=stds, capsize=5, color=colors[:4], 
+                  edgecolor='white', linewidth=0.5)
+    
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(['Accuracy', 'Precision', 'Recall', 'F1 Score'])
+    ax.set_ylabel('Score', fontsize=12)
+    ax.set_title('Cross-Validation Metrics (5-fold)', fontsize=14, fontweight='bold')
+    ax.set_ylim(0, 1.1)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Add value labels
+    for bar, mean, std in zip(bars, means, stds):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std + 0.02,
+                f'{mean:.3f}', ha='center', va='bottom', fontsize=10)
+    
+    plt.tight_layout()
+    plot_file = output_dir / "cv_metrics.png"
+    plt.savefig(plot_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    plot_files["cv_metrics"] = str(plot_file)
+    
+    print(f"Visualizations saved to: {output_dir}/")
+    return plot_files
+
+
+def generate_html_report(
+    results: dict,
+    plot_files: dict,
+    output_file: Path,
+) -> None:
+    """Generate an HTML report with tables and embedded visualizations."""
+    
+    cfg = results["config"]
+    cv = results["cross_validation"]
+    tm = results["test_metrics"]
+    cm = results["confusion_matrix"]
+    fi = results["feature_importance"]
+    
+    # Build HTML
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classifier Training Report</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        h1 {{ 
+            color: #2c3e50; 
+            border-bottom: 3px solid #3498db; 
+            padding-bottom: 10px; 
+            margin-bottom: 30px;
+        }}
+        h2 {{ 
+            color: #34495e; 
+            margin: 30px 0 15px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }}
+        .card {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }}
+        .metric-box {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .metric-box.green {{ background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }}
+        .metric-box.blue {{ background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }}
+        .metric-box.orange {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }}
+        .metric-box.purple {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}
+        .metric-value {{ font-size: 2em; font-weight: bold; }}
+        .metric-label {{ font-size: 0.9em; opacity: 0.9; }}
+        table {{ 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 15px 0;
+            background: white;
+        }}
+        th, td {{ 
+            padding: 12px 15px; 
+            text-align: left; 
+            border-bottom: 1px solid #eee;
+        }}
+        th {{ 
+            background: #f8f9fa; 
+            font-weight: 600;
+            color: #2c3e50;
+        }}
+        tr:hover {{ background: #f8f9fa; }}
+        .importance-bar {{
+            background: #3498db;
+            height: 20px;
+            border-radius: 3px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+        }}
+        .plot-container {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        .plot-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .plot-card img {{
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }}
+        .cm-table {{ width: auto; margin: 0 auto; }}
+        .cm-table td {{ 
+            width: 100px; 
+            height: 60px; 
+            text-align: center; 
+            font-weight: bold;
+            font-size: 1.2em;
+        }}
+        .cm-tn {{ background: #d4edda; color: #155724; }}
+        .cm-fp {{ background: #f8d7da; color: #721c24; }}
+        .cm-fn {{ background: #fff3cd; color: #856404; }}
+        .cm-tp {{ background: #cce5ff; color: #004085; }}
+        .summary {{ 
+            background: #e8f4fd; 
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }}
+        .footer {{
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }}
+    </style>
+</head>
+<body>
+    <h1>🤖 Classifier Training Report</h1>
+    
+    <div class="card">
+        <h2>📊 Configuration</h2>
+        <div class="metrics-grid">
+            <div class="metric-box purple">
+                <div class="metric-value">{cfg['classifier_type'].replace('_', ' ').title()}</div>
+                <div class="metric-label">Classifier Type</div>
+            </div>
+            <div class="metric-box blue">
+                <div class="metric-value">{cfg['n_samples']}</div>
+                <div class="metric-label">Training Samples</div>
+            </div>
+            <div class="metric-box green">
+                <div class="metric-value">{cfg['n_features']}</div>
+                <div class="metric-label">Features</div>
+            </div>
+            <div class="metric-box orange">
+                <div class="metric-value">{cfg['positive_rate']:.1%}</div>
+                <div class="metric-label">Positive Rate</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>📈 Test Set Performance</h2>
+        <div class="metrics-grid">
+            <div class="metric-box green">
+                <div class="metric-value">{tm['accuracy']:.1%}</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-box blue">
+                <div class="metric-value">{tm['precision']:.1%}</div>
+                <div class="metric-label">Precision</div>
+            </div>
+            <div class="metric-box purple">
+                <div class="metric-value">{tm['recall']:.1%}</div>
+                <div class="metric-label">Recall</div>
+            </div>
+            <div class="metric-box orange">
+                <div class="metric-value">{tm['f1']:.1%}</div>
+                <div class="metric-label">F1 Score</div>
+            </div>
+        </div>
+        {"<p><strong>ROC AUC:</strong> " + f"{tm['roc_auc']:.3f}</p>" if 'roc_auc' in tm else ""}
+    </div>
+    
+    <div class="card">
+        <h2>🔄 Cross-Validation Results (5-fold)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Mean</th>
+                    <th>Std Dev</th>
+                    <th>Range</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Accuracy</td>
+                    <td><strong>{cv['accuracy']['mean']:.3f}</strong></td>
+                    <td>± {cv['accuracy']['std']:.3f}</td>
+                    <td>{cv['accuracy']['mean'] - cv['accuracy']['std']:.3f} - {cv['accuracy']['mean'] + cv['accuracy']['std']:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Precision</td>
+                    <td><strong>{cv['precision']['mean']:.3f}</strong></td>
+                    <td>± {cv['precision']['std']:.3f}</td>
+                    <td>{cv['precision']['mean'] - cv['precision']['std']:.3f} - {cv['precision']['mean'] + cv['precision']['std']:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Recall</td>
+                    <td><strong>{cv['recall']['mean']:.3f}</strong></td>
+                    <td>± {cv['recall']['std']:.3f}</td>
+                    <td>{cv['recall']['mean'] - cv['recall']['std']:.3f} - {cv['recall']['mean'] + cv['recall']['std']:.3f}</td>
+                </tr>
+                <tr>
+                    <td>F1 Score</td>
+                    <td><strong>{cv['f1']['mean']:.3f}</strong></td>
+                    <td>± {cv['f1']['std']:.3f}</td>
+                    <td>{cv['f1']['mean'] - cv['f1']['std']:.3f} - {cv['f1']['mean'] + cv['f1']['std']:.3f}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="card">
+        <h2>🎯 Confusion Matrix</h2>
+        <table class="cm-table">
+            <tr>
+                <td></td>
+                <td><strong>Predicted Failed</strong></td>
+                <td><strong>Predicted Resolved</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Actual Failed</strong></td>
+                <td class="cm-tn">TN: {cm[0][0]}</td>
+                <td class="cm-fp">FP: {cm[0][1]}</td>
+            </tr>
+            <tr>
+                <td><strong>Actual Resolved</strong></td>
+                <td class="cm-fn">FN: {cm[1][0]}</td>
+                <td class="cm-tp">TP: {cm[1][1]}</td>
+            </tr>
+        </table>
+        <div class="summary">
+            <strong>Interpretation:</strong>
+            <ul style="margin-top: 10px; padding-left: 20px;">
+                <li><strong>True Negatives ({cm[0][0]}):</strong> Correctly predicted failures</li>
+                <li><strong>True Positives ({cm[1][1]}):</strong> Correctly predicted successes</li>
+                <li><strong>False Positives ({cm[0][1]}):</strong> Predicted success but actually failed</li>
+                <li><strong>False Negatives ({cm[1][0]}):</strong> Predicted failure but actually succeeded</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>⭐ Feature Importance (Top 20)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Feature</th>
+                    <th>Importance</th>
+                    <th>Visualization</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+    
+    # Add feature importance rows
+    max_importance = fi[0]["importance"] if fi else 1
+    for i, f in enumerate(fi[:20], 1):
+        bar_width = int((f["importance"] / max_importance) * 200)
+        html += f"""                <tr>
+                    <td>{i}</td>
+                    <td><code>{f['feature']}</code></td>
+                    <td><strong>{f['importance']:.4f}</strong></td>
+                    <td><div class="importance-bar" style="width: {bar_width}px;"></div></td>
+                </tr>
+"""
+    
+    html += """            </tbody>
+        </table>
+    </div>
+"""
+    
+    # Add plots if available
+    if plot_files:
+        html += """
+    <div class="card">
+        <h2>📉 Visualizations</h2>
+        <div class="plot-container">
+"""
+        for name, path in plot_files.items():
+            # Use relative path or embed as base64
+            import base64
+            try:
+                with open(path, "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode()
+                html += f"""            <div class="plot-card">
+                <img src="data:image/png;base64,{img_data}" alt="{name}">
+            </div>
+"""
+            except:
+                pass
+        
+        html += """        </div>
+    </div>
+"""
+    
+    # Footer
+    from datetime import datetime
+    html += f"""
+    <div class="footer">
+        <p>Generated by Coding Agent Eval Framework</p>
+        <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+</body>
+</html>
+"""
+    
+    # Write file
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w") as f:
+        f.write(html)
+    
+    print(f"HTML report saved to: {output_file}")
+
+
+def save_model(clf, scaler, feature_names: list[str], feature_map: dict, results: dict, output_dir: str) -> Path:
     """Save trained model and metadata."""
     import joblib
     
@@ -399,6 +1001,7 @@ def save_model(clf, scaler, feature_names: list[str], results: dict, output_dir:
         "classifier": clf,
         "scaler": scaler,
         "feature_names": feature_names,
+        "feature_map": feature_map,
     }, model_file)
     
     # Save results
@@ -412,29 +1015,28 @@ def save_model(clf, scaler, feature_names: list[str], results: dict, output_dir:
     return model_file
 
 
-def load_model(model_path: str) -> tuple:
-    """Load a trained model."""
+def predict(model_path: str, result_data: dict) -> dict:
+    """Use trained model to predict success from a benchmark result JSON."""
     import joblib
     
     data = joblib.load(model_path)
-    return data["classifier"], data["scaler"], data["feature_names"]
-
-
-def predict(model_path: str, metrics: dict) -> dict:
-    """Use trained model to predict success from metrics."""
-    clf, scaler, feature_names = load_model(model_path)
+    clf = data["classifier"]
+    scaler = data["scaler"]
+    feature_names = data["feature_names"]
+    feature_map = data.get("feature_map", {})
     
-    # Extract features
+    # Extract features using the same mapping used during training
     features = []
-    for feat in feature_names:
-        value = metrics.get(feat, 0)
-        if isinstance(value, bool):
-            value = int(value)
-        if value is None:
+    for feat_name in feature_names:
+        if feat_name in feature_map:
+            path = feature_map[feat_name]
+            value = extract_feature_value(result_data, path)
+        else:
             value = 0
-        if feat == "relevant_file_discovery_step" and value == -1:
+        
+        if "discovery_step" in feat_name and value == -1:
             value = 100
-        features.append(float(value))
+        features.append(value)
     
     X = np.array([features])
     
@@ -525,6 +1127,11 @@ def main():
         action="store_true",
         help="Only evaluate, don't save model",
     )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Generate HTML report with visualizations",
+    )
     
     # Prediction mode
     parser.add_argument(
@@ -556,11 +1163,11 @@ def main():
         return
     
     # Training mode
-    print("Loading training data...")
-    examples = load_training_data(args.data)
-    print(f"Loaded {len(examples)} examples")
+    print("Loading benchmark results...")
+    results = load_benchmark_results(args.data)
+    print(f"Loaded {len(results)} examples")
     
-    if len(examples) < 10:
+    if len(results) < 10:
         print("ERROR: Need at least 10 examples for training")
         return
     
@@ -572,9 +1179,9 @@ def main():
     
     # Extract features
     print("Extracting features...")
-    X, y, feature_names = extract_features(examples, config)
+    X, y, feature_names, feature_map = extract_features(results, config)
     print(f"Feature matrix: {X.shape}")
-    print(f"Positive examples: {y.sum()} ({y.mean():.1%})")
+    print(f"Positive examples: {y.sum()} ({y.mean():.1%})") 
     
     # Show correlations if requested
     if args.show_correlations:
@@ -582,14 +1189,35 @@ def main():
     
     # Train and evaluate
     print()
-    results, clf, scaler = train_and_evaluate(X, y, feature_names, config)
+    eval_results, clf, scaler, test_data = train_and_evaluate(X, y, feature_names, config)
     
     # Print results
-    print_results(results)
+    print_results(eval_results)
     
     # Save model
+    output_path = Path(args.output)
     if not args.evaluate_only:
-        save_model(clf, scaler, feature_names, results, args.output)
+        save_model(clf, scaler, feature_names, feature_map, eval_results, args.output)
+    
+    # Generate report with visualizations
+    if args.report:
+        print()
+        print("Generating visualizations...")
+        plot_files = generate_visualizations(
+            eval_results,
+            test_data["X_test"],
+            test_data["y_test"],
+            test_data["y_pred"],
+            test_data["y_prob"],
+            output_path / "plots",
+        )
+        
+        print("Generating HTML report...")
+        generate_html_report(
+            eval_results,
+            plot_files,
+            output_path / "classifier_report.html",
+        )
 
 
 if __name__ == "__main__":
