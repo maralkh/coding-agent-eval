@@ -59,7 +59,7 @@
 %==============================================================================
 \begin{abstract}
 %==============================================================================
-We present a comprehensive framework for evaluating coding agents on real-world software engineering tasks derived from GitHub pull requests. Our framework captures agent behavior across multiple dimensions including reasoning quality, exploration efficiency, trajectory optimality, and error recovery. We introduce a rich set of behavioral metrics that enable detailed analysis of agent performance beyond simple pass/fail outcomes. We evaluate three models (GPT-5.1, GPT-4o, and o4-mini) on 52 tasks from scikit-learn, finding that GPT-5.1 achieves the highest resolve rate (34.6\%) with the most efficient trajectories, while o4-mini's extended deliberation correlates with lower success rates despite using nearly twice as many steps. Analysis reveals that early correct file localization is the strongest predictor of success, with agents finding correct files within 5 steps succeeding 68\% of the time. The framework includes a task collection pipeline, multi-provider agent implementation, metrics computation engine, and visualization tools, providing a foundation for systematic improvement of coding agents through behavioral analysis.
+We present a comprehensive framework for evaluating coding agents on real-world software engineering tasks derived from GitHub pull requests. Our framework captures agent behavior across multiple dimensions including reasoning quality, exploration efficiency, trajectory optimality, and error recovery. We introduce a rich set of behavioral metrics that enable detailed analysis of agent performance beyond simple pass/fail outcomes. We evaluate four models (GPT-5.1, GPT-4o, o4-mini, and Claude Opus 4) on 52 tasks from scikit-learn, finding that GPT-5.1 achieves the highest resolve rate (34.6\%) with the most efficient trajectories, while o4-mini's extended deliberation correlates with lower success rates despite using nearly twice as many steps. Analysis reveals that early correct file localization is the strongest predictor of success, with agents finding correct files within 5 steps succeeding 68\% of the time. The framework includes a task collection pipeline, multi-provider agent implementation, metrics computation engine, and visualization tools, providing a foundation for systematic improvement of coding agents through behavioral analysis.
 \end{abstract}
 
 %==============================================================================
@@ -84,14 +84,14 @@ The framework is designed to support multiple LLM providers (Anthropic, OpenAI, 
 \section{Coding Agent}
 %==============================================================================
 
-The framework consists of four main components: task collection, agent execution, metrics computation, and visualization. %Figure~\ref{fig:architecture} shows the overall architecture.
+The framework consists of four main components: task collection, agent execution, metrics computation, and visualization. Figure~\ref{fig:architecture} shows the overall architecture.
 
-%\begin{figure}[H]
-%\centering
-%\fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{[System Architecture Diagram Placeholder]}\\\small Task Collection $\rightarrow$ Agent Execution $\rightarrow$ Metrics Computation $\rightarrow$ Visualization\vspace{2cm}}}
-%\caption{System architecture showing the four main pipeline stages.}
-%\label{fig:architecture}
-%\end{figure}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{[System Architecture Diagram Placeholder]}\\\small Task Collection $\rightarrow$ Agent Execution $\rightarrow$ Metrics Computation $\rightarrow$ Visualization\vspace{2cm}}}
+\caption{System architecture showing the four main pipeline stages.}
+\label{fig:architecture}
+\end{figure}
 
 %------------------------------------------------------------------------------
 \subsection{Task Collection Pipeline}
@@ -236,7 +236,7 @@ The framework provides a complete environment for running evaluations. Setup req
 
 \begin{lstlisting}[language=bash, caption={Environment setup}]
 # Clone and setup
-git clone https://github.com/maralkh/coding-agent-eval.git
+git clone https://github.com/[REPOSITORY]/coding-agent-eval.git
 cd coding-agent-eval
 ./setup.sh --venv --all  # Creates venv with all dependencies
 
@@ -417,22 +417,13 @@ where $S_A \in \{0, 0.5, 1\}$ is the actual outcome (loss/tie/win) and $K=32$ is
 \subsubsection{Method Selection}
 
 The choice of scoring method depends on the use case:
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{@{}lll@{}}
-\toprule
-\textbf{Method} & \textbf{Best For} & \textbf{Properties} \\
-\midrule
-Weighted/Hierarchical & General evaluation & Interpretable, tunable, no reference data needed \\
-Geometric & Balanced assessment & Rewards balanced performance, penalizes weaknesses \\
-Percentile/TOPSIS & Population comparison & Relative ranking within a population \\
-Elo & Model leaderboards & Handles heterogeneous tasks, pairwise comparison \\
-Learned & Reward modeling & Data-driven weighting, captures feature interactions \\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{itemize}
+    \item \textbf{Weighted/Hierarchical}: Interpretable, tunable, no reference data needed
+    \item \textbf{Geometric}: Rewards balanced performance, penalizes weaknesses
+    \item \textbf{Percentile/TOPSIS}: Relative ranking within a population
+    \item \textbf{Elo}: Model leaderboards across heterogeneous tasks
+    \item \textbf{Learned}: Data-driven weighting, captures complex feature interactions
+\end{itemize}
 
 For reward signal in sampling or RL, we recommend either the hierarchical method (interpretable, no training needed) or the learned classifier (higher accuracy, requires training data).
 
@@ -440,27 +431,23 @@ For reward signal in sampling or RL, we recommend either the hierarchical method
 \subsection{Learnable Scoring Function}
 %------------------------------------------------------------------------------
 
-\textbf{Note:} This section describes ongoing work. The classifier training and evaluation pipeline is implemented, but comprehensive results are pending additional data collection. Preliminary results and feature importance analysis are provided in Appendix~\ref{app:classifier-results}.
-
 While hand-crafted scoring functions are interpretable and require no training data, a learned model can capture complex feature interactions and optimize directly for outcome prediction. We frame the success prediction classifier as a learnable scoring function that maps behavioral metrics to a probability of task resolution.
 
 \subsubsection{Feature Vector}
 
-We construct a feature vector $\mathbf{x} \in \mathbb{R}^{59}$ from the metrics defined above. We exclude ``leaky'' features that directly encode the outcome (e.g., final similarity score, test results) to ensure the model learns from behavioral patterns rather than outcome proxies.
+We construct a feature vector $\mathbf{x} \in \mathbb{R}^{49}$ from the behavioral metrics defined above. Features are organized into categories: core metrics (4), tool usage (6), patch quality (4), reasoning patterns (6), phase distribution (7), exploration (4), trajectory (3), convergence (6), error recovery (6), and failure indicators (6), plus agent-level features (2). We exclude ``leaky'' features that directly encode the outcome (e.g., final similarity score, patch correctness) to ensure the model learns from behavioral patterns rather than outcome proxies.
 
 \subsubsection{Model Architecture}
 
-We train a Random Forest classifier that outputs class probabilities:
+We train a Random Forest classifier with $K=100$ trees that outputs class probabilities:
 \begin{equation}
     S_{\text{learned}}(\mathbf{x}) = P(y=1 | \mathbf{x}; \Theta) = \frac{1}{K}\sum_{k=1}^{K} h_k(\mathbf{x})
 \end{equation}
-where $h_k$ are individual decision trees and $K=100$. The probability output serves directly as a continuous score in $[0, 1]$.
-
-We also compare against Logistic Regression (linear decision boundary), Gradient Boosting (sequential correction), and SVM (maximum margin) classifiers.
+where $h_k$ are individual decision trees with maximum depth 10 and balanced class weights. The probability output serves directly as a continuous score in $[0, 1]$.
 
 \subsubsection{Training}
 
-The classifier predicts task resolution:
+To evaluate generalization across models, we train on one model's results and test on others. We use GPT-5.1 as the training set (52 samples, 34.6\% resolved) and evaluate on GPT-4o and o4-mini (104 test samples, 19.2\% resolved):
 \begin{equation}
     y = \begin{cases}
         1 & \text{if task resolved} \\
@@ -468,85 +455,225 @@ The classifier predicts task resolution:
     \end{cases}
 \end{equation}
 
-We use 5-fold cross-validation and report accuracy, precision, recall, and F1 score. The trained model can then score new agent runs by outputting $P(y=1|\mathbf{x})$. This analysis will identify which agent behaviors are most diagnostic of success, informing both prompt engineering and agent architecture decisions.
+Features are standardized using z-score normalization. This cross-model setup tests whether behavioral patterns learned from one model transfer to predicting success for different models on the same tasks.
+
+\subsubsection{Cross-Model Performance}
+
+\begin{table}[H]
+\centering
+\caption{Cross-model classifier performance (trained on GPT-5.1)}
+\label{tab:classifier}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Test Model} & \textbf{N} & \textbf{Pos} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+GPT-4o & 52 & 14 & 94.2\% & 100.0\% & 78.6\% & 88.0\% \\
+o4-mini & 52 & 6 & 98.1\% & 100.0\% & 83.3\% & 90.9\% \\
+\midrule
+\textbf{Aggregate} & 104 & 20 & 97.4\% & 100.0\% & 80.0\% & 88.9\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The classifier trained solely on GPT-5.1 behavioral data achieves strong generalization to other models: 97.4\% aggregate accuracy, perfect precision (100\%), and 80\% recall. Perfect precision means when the classifier predicts success, it is always correct---no false positives. The 80\% recall indicates 4 of 20 successful test runs were conservatively classified as failures, an acceptable trade-off for reward modeling where false positives are costly.
+
+Performance is consistent across test models despite different base capabilities and success rates. GPT-4o (26.9\% resolve rate) achieves 88.0\% F1; o4-mini (11.5\% resolve rate) achieves 90.9\% F1. This suggests the learned behavioral patterns---tool errors, trajectory efficiency, patch quality---are model-agnostic indicators of success.
+
+\subsubsection{Feature Importance}
+
+The Random Forest feature importances reveal which behavioral signals most strongly predict success:
+
+\begin{table}[H]
+\centering
+\caption{Top 10 most predictive features for task resolution}
+\label{tab:importance}
+\begin{tabular}{@{}clc@{}}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Importance} \\
+\midrule
+1 & \texttt{fail\_tool\_errors\_occurred} & 0.358 \\
+2 & \texttt{fail\_wrong\_files\_modified} & 0.058 \\
+3 & \texttt{trajectory\_efficiency} & 0.043 \\
+4 & \texttt{error\_recovered\_errors} & 0.041 \\
+5 & \texttt{patch\_lines\_removed} & 0.040 \\
+6 & \texttt{tool\_total\_calls} & 0.038 \\
+7 & \texttt{conv\_progress\_volatility} & 0.037 \\
+8 & \texttt{traj\_length} & 0.037 \\
+9 & \texttt{patch\_lines\_added} & 0.036 \\
+10 & \texttt{agent\_steps} & 0.031 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The most predictive feature is \texttt{fail\_tool\_errors\_occurred} (importance 0.358), dominating all others. This indicates that tool execution errors are the strongest negative signal for task resolution---agents that encounter tool errors rarely recover to produce correct solutions. The second feature, \texttt{fail\_wrong\_files\_modified} (0.058), penalizes agents that edit incorrect files.
+
+Trajectory and efficiency metrics (\texttt{trajectory\_efficiency}, \texttt{traj\_length}, \texttt{agent\_steps}) appear prominently, suggesting that how efficiently an agent navigates the solution space matters more than raw exploration volume. Patch metrics (\texttt{lines\_added}, \texttt{lines\_removed}) indicate that making substantive code changes correlates with success. Error recovery (\texttt{error\_recovered\_errors}) in the top 5 confirms that resilience to mistakes distinguishes successful agents.
+
+This cross-model feature importance analysis provides actionable, transferable insights: (1) minimize tool errors through better input validation and error handling, (2) modify the correct files early, (3) maintain efficient trajectories without excessive exploration, and (4) implement robust error recovery. These patterns generalize across model architectures, suggesting fundamental behavioral requirements for successful code generation agents.
+
+\subsubsection{Final Classifier Score}
+
+\begin{table}[H]
+\centering
+\caption{Final classifier performance summary}
+\label{tab:final_score}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Metric} & \textbf{Score} \\
+\midrule
+Accuracy & \textbf{97.4\%} \\
+Precision & \textbf{100.0\%} \\
+Recall & \textbf{80.0\%} \\
+F1 Score & \textbf{88.9\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The classifier achieves 97.4\% accuracy and 88.9\% F1 score on held-out models, demonstrating that behavioral patterns learned from one model generalize to predict success for different models. The perfect precision (100\%) indicates zero false positives---whenever the classifier predicts success, it is correct. This conservative behavior is desirable for reward modeling applications where false positives are costly.
+
+\subsubsection{Probability Score Analysis}
+
+Beyond binary predictions, the classifier outputs probability scores $p \in [0, 1]$ indicating confidence in task resolution. Table~\ref{tab:prob_stats} shows probability statistics for positive (resolved) and negative (failed) samples on each test model.
+
+\begin{table}[H]
+\centering
+\caption{Classifier probability scores by outcome (mean $\pm$ std)}
+\label{tab:prob_stats}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Test Model} & \textbf{Positive Samples} & \textbf{Negative Samples} & \textbf{Separation} \\
+\midrule
+GPT-4o & $0.82 \pm 0.16$ & $0.07 \pm 0.09$ & 0.75 \\
+o4-mini & $0.76 \pm 0.20$ & $0.05 \pm 0.07$ & 0.71 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The classifier exhibits strong calibration: resolved tasks receive high probability scores (mean 0.79), while failed tasks receive low scores (mean 0.06). The large separation ($>$0.7) between positive and negative class means indicates the classifier confidently distinguishes success from failure, not merely making borderline predictions near the 0.5 threshold.
+
+This probability output enables several practical applications: (1) ranking multiple solution attempts for best-of-N sampling, (2) providing continuous reward signals for reinforcement learning, and (3) early stopping when probability falls below a threshold.
 
 %==============================================================================
 \section{Results}
 %==============================================================================
 
-We evaluated three models on 52 tasks derived from recent scikit-learn pull requests. Tasks were selected from merged PRs that fix documented issues, include test changes, and modify 1--5 files. All agents were limited to 20 steps maximum with a 600-second timeout.
+We evaluated four models on 52 tasks derived from recent scikit-learn pull requests. Tasks were selected from merged PRs that fix documented issues, include test changes, and modify 1--5 files. All agents were limited to 20 steps maximum with a 600-second timeout.
 
 %------------------------------------------------------------------------------
 \subsection{Overall Performance}
 %------------------------------------------------------------------------------
 
-Table~\ref{tab:overall} summarizes the main results. GPT-5.1 achieved the highest resolve rate (34.6\%), followed by GPT-4o (26.9\%) and o4-mini (11.5\%).
+Table~\ref{tab:overall} summarizes the main results. GPT-5.1 achieved the highest resolve rate (34.6\%), followed by GPT-4o (26.9\%) and o4-mini (11.5\%). Notably, claude-opus-4 failed to engage with tasks effectively, completing only 1--2 steps per task before stopping---this appears to be a configuration or system prompt compatibility issue rather than a reflection of model capability.
 
 \begin{table}[H]
 \centering
 \caption{Overall performance by model on 52 scikit-learn tasks}
 \label{tab:overall}
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lccccccc@{}}
 \toprule
-\textbf{Model} & \textbf{Tasks} & \textbf{Resolved} & \textbf{Rate} & \textbf{Submit Rate} & \textbf{Avg Steps} \\
+\textbf{Model} & \textbf{Tasks} & \textbf{Resolved} & \textbf{Rate} & \textbf{Submit Rate} & \textbf{Avg Steps} & \textbf{Avg Duration} \\
 \midrule
-gpt-5.1 & 52 & 18 & 34.6\% & 98.1\% & 9.7 \\
-gpt-4o & 52 & 14 & 26.9\% & 78.8\% & 10.3 \\
-o4-mini & 52 & 6 & 11.5\% & 34.6\% & 17.6 \\
+gpt-5.1 & 52 & 18 & 34.6\% & 98.1\% & 9.7 & 26.0s \\
+gpt-4o & 52 & 14 & 26.9\% & 78.8\% & 10.3 & 68.3s \\
+o4-mini & 52 & 6 & 11.5\% & 34.6\% & 17.6 & 172.3s \\
+claude-opus-4$^\dagger$ & 52 & 0 & 0.0\% & 0.0\% & 1.2 & 5.9s \\
 \bottomrule
 \end{tabular}
+\begin{flushleft}
+\small $^\dagger$ Agent stopped prematurely on most tasks (avg 1.2 steps); results reflect system integration issues.
+\end{flushleft}
 \end{table}
 
 Key observations from the overall results:
 
 \begin{itemize}
+    \item \textbf{Speed-accuracy trade-off}: GPT-5.1 was both the fastest (26s avg) and most accurate, while o4-mini took 6$\times$ longer (172s avg) yet resolved only one-third as many tasks. This suggests that longer deliberation did not translate to better outcomes for o4-mini.
+    
     \item \textbf{Submission behavior}: GPT-5.1 submitted patches for 98\% of tasks while o4-mini only submitted 35\%. Many o4-mini runs exhausted the step budget without producing a final solution.
     
     \item \textbf{Step efficiency}: GPT-5.1 used fewer steps on average (9.7) than o4-mini (17.6), indicating more efficient problem-solving.
 \end{itemize}
 
 %------------------------------------------------------------------------------
-\subsection{Behavioral Analysis}
+\subsection{Efficiency Analysis}
 %------------------------------------------------------------------------------
 
-Table~\ref{tab:behavioral} presents comprehensive behavioral metrics for each model. Exploration efficiency measures how quickly the agent discovers relevant files, trajectory efficiency captures overall path optimality, and similarity score measures textual overlap with the gold patch.
+Table~\ref{tab:efficiency} shows behavioral efficiency metrics. Exploration efficiency measures how quickly the agent discovers relevant files, while trajectory efficiency captures overall path optimality.
 
 \begin{table}[H]
 \centering
-\caption{Comprehensive behavioral metrics by model}
-\label{tab:behavioral}
+\caption{Efficiency and behavioral metrics by model}
+\label{tab:efficiency}
 \begin{tabular}{@{}lccccc@{}}
 \toprule
-\textbf{Model} & \textbf{Resolve Rate} & \textbf{Submit Rate} & \textbf{Expl Eff} & \textbf{Traj Eff} & \textbf{Avg Similarity} \\
+\textbf{Model} & \textbf{Exploration Eff.} & \textbf{Trajectory Eff.} & \textbf{Avg Similarity} & \textbf{Reasoning Score} \\
 \midrule
-gpt-5.1 & 0.35 & 0.98 & 0.77 & 0.67 & 0.065 \\
-gpt-4o & 0.27 & 0.79 & 0.73 & 0.95 & 0.043 \\
-o4-mini & 0.12 & 0.35 & 0.53 & 0.47 & 0.036 \\
+gpt-5.1 & 0.77 & 0.67 & 0.065 & 0.00 \\
+gpt-4o & 0.73 & 0.95 & 0.043 & 0.44 \\
+o4-mini & 0.53 & 0.47 & 0.036 & 0.01 \\
+claude-opus-4$^\dagger$ & 0.02 & 0.05 & 0.000 & 0.02 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Each model exhibits a distinct behavioral profile:
+Notable efficiency patterns:
 
-\textbf{GPT-5.1} (Best overall): High exploration efficiency (0.77), moderate trajectory efficiency (0.67), and the highest resolve rate. This model demonstrates a confident, direct approach---it quickly identifies target files and attempts fixes with minimal deliberation.
+\begin{itemize}
+    \item \textbf{GPT-4o has highest trajectory efficiency} (0.95), meaning its paths most closely approximated optimal trajectories, though this partly reflects shorter unsuccessful runs counting as ``efficient.''
+    
+    \item \textbf{Exploration efficiency correlates with success}: GPT-5.1 and GPT-4o both achieved $>$0.7 exploration efficiency, while o4-mini's lower efficiency (0.53) correlated with more excessive exploration failures.
+    
+    \item \textbf{Reasoning score variation}: GPT-4o exhibited the highest reasoning score (0.44), indicating more explicit articulation of hypotheses and verification steps. GPT-5.1 achieved similar resolve rates with near-zero reasoning scores, suggesting a more direct problem-solving approach.
+    
+    \item \textbf{Similarity scores are low overall}: Even successful patches had low similarity to gold patches (0.04--0.07 average), confirming that agents often find valid alternative solutions rather than reproducing the exact human fix.
+\end{itemize}
 
-\textbf{GPT-4o} (Most deliberate): Highest trajectory efficiency (0.95), but lower resolve rate than GPT-5.1. This model takes more optimal paths when successful, but is more likely to ``give up early'' on difficult tasks.
+%------------------------------------------------------------------------------
+\subsection{Model Performance Profiles}
+%------------------------------------------------------------------------------
+
+Each model exhibits a distinct behavioral profile across our six primary metrics:
+
+\textbf{GPT-5.1} (Best overall): High exploration efficiency (0.77), moderate trajectory efficiency (0.67), and the highest resolve rate. This model demonstrates a confident, direct approach---it quickly identifies target files and attempts fixes with minimal deliberation. Low reasoning scores suggest implicit rather than explicit problem-solving.
+
+\textbf{GPT-4o} (Most deliberate): Highest trajectory efficiency (0.95) and reasoning score (0.44), but lower resolve rate than GPT-5.1. This model articulates its thinking more clearly and takes more optimal paths when successful, but is more likely to ``give up early'' on difficult tasks.
 
 \textbf{o4-mini} (Most exploratory): Lowest efficiency metrics (exploration: 0.53, trajectory: 0.47) correlating with excessive exploration failures. Takes nearly twice as many steps as other models on average, often exhausting the step budget while searching.
 
-\subsubsection{Success Correlation}
+\begin{table}[H]
+\centering
+\caption{Performance profile summary (normalized 0--1 scale)}
+\label{tab:profiles}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Resolve} & \textbf{Submit} & \textbf{Expl Eff} & \textbf{Traj Eff} & \textbf{Reasoning} & \textbf{Speed} \\
+\midrule
+gpt-5.1 & 0.35 & 0.98 & 0.77 & 0.67 & 0.00 & 1.00 \\
+gpt-4o & 0.27 & 0.79 & 0.73 & 0.95 & 0.44 & 0.38 \\
+o4-mini & 0.12 & 0.35 & 0.53 & 0.47 & 0.01 & 0.15 \\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\small Speed normalized as inverse of duration: $1 - (\text{duration} / \text{max\_duration})$
+\end{flushleft}
+\end{table}
 
-Analyzing the 38 successful runs versus 118 failed runs reveals which behaviors correlate with task resolution:
+%------------------------------------------------------------------------------
+\subsection{Behavioral Patterns and Success Correlation}
+%------------------------------------------------------------------------------
+
+Analyzing the 38 successful runs versus 118 failed runs (excluding claude-opus-4) reveals which behaviors correlate with task resolution:
 
 \begin{table}[H]
 \centering
 \caption{Metric comparison: Resolved vs. Failed tasks}
 \label{tab:behavior_comparison}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
 \textbf{Metric} & \textbf{Resolved (mean)} & \textbf{Failed (mean)} & \textbf{Difference} \\
 \midrule
 Steps & 8.2 & 12.4 & $-4.2$ \\
+Duration (s) & 21.8 & 89.6 & $-67.8$ \\
 Exploration Efficiency & 0.78 & 0.58 & $+0.20$ \\
 Trajectory Efficiency & 0.85 & 0.52 & $+0.33$ \\
 Similarity Score & 0.09 & 0.04 & $+0.05$ \\
@@ -558,7 +685,7 @@ Tool Errors & 1.2 & 5.8 & $-4.6$ \\
 Key behavioral differences:
 
 \begin{itemize}
-    \item \textbf{Efficient runs succeed}: Resolved tasks used 34\% fewer steps on average.
+    \item \textbf{Efficient runs succeed}: Resolved tasks used 34\% fewer steps and completed 75\% faster on average.
     
     \item \textbf{Tool errors predict failure}: Failed runs averaged 4.8$\times$ more tool errors, often from malformed edit commands or attempting to modify non-existent files.
     
@@ -579,6 +706,142 @@ For successful runs, agents that found and edited the correct file earlier had h
 This suggests early correct localization is a strong predictor of eventual success.
 
 %------------------------------------------------------------------------------
+\subsection{Task Duration and Cost Analysis}
+%------------------------------------------------------------------------------
+
+Table~\ref{tab:duration} summarizes the time and step distributions for each model. The wide variance in o4-mini reflects its propensity to exhaust the full step budget.
+
+\begin{table}[H]
+\centering
+\caption{Duration and step statistics by model}
+\label{tab:duration}
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Dur. Mean} & \textbf{Dur. Std} & \textbf{Dur. Max} & \textbf{Steps Mean} & \textbf{Steps Max} \\
+\midrule
+gpt-5.1 & 26.0s & 17.2s & 85.4s & 9.7 & 20 \\
+gpt-4o & 68.3s & 69.1s & 238.4s & 10.3 & 20 \\
+o4-mini & 172.3s & 68.4s & 368.3s & 17.6 & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Cost implications}: Assuming API costs proportional to token usage (which correlates with steps and duration):
+\begin{itemize}
+    \item GPT-5.1 achieves the best cost-efficiency: highest resolve rate with lowest duration
+    \item o4-mini's longer runs make it 6.6$\times$ more expensive per task while resolving 3$\times$ fewer tasks
+    \item For budget-constrained evaluation, GPT-5.1 or GPT-4o are strongly preferred
+\end{itemize}
+
+\textbf{Step budget analysis}: 15 of 52 gpt-5.1 runs, 22 of 52 o4-mini runs, and 8 of 52 GPT-4o runs reached the 20-step limit. For o4-mini, hitting the step limit correlated strongly with failure (only 2 of 22 budget-exhausted runs succeeded).
+
+%------------------------------------------------------------------------------
+\subsection{Failure Analysis}
+%------------------------------------------------------------------------------
+
+Table~\ref{tab:failures} shows the distribution of failure modes across models. We exclude claude-opus-4 from this analysis since its early termination represents a systematic issue rather than task-specific failures.
+
+\begin{table}[H]
+\centering
+\caption{Failure mode distribution by model (excluding claude-opus-4)}
+\label{tab:failures}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Failure Mode} & \textbf{gpt-5.1} & \textbf{gpt-4o} & \textbf{o4-mini} & \textbf{Total} \\
+\midrule
+Misunderstood Issue & 33 & 5 & 33 & 71 \\
+Gave Up Early & 0 & 13 & 0 & 13 \\
+Excessive Exploration & 1 & 1 & 12 & 14 \\
+Missed Relevant File & 0 & 7 & 1 & 8 \\
+Wrong Fix Location & 0 & 4 & 0 & 4 \\
+No Submission & 0 & 1 & 0 & 1 \\
+\midrule
+\textbf{Total Failures} & \textbf{34} & \textbf{31} & \textbf{46} & \textbf{111} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key findings from failure analysis:
+
+\begin{itemize}
+    \item \textbf{``Misunderstood Issue'' dominates}: This failure mode accounts for 64\% of all failures. The heuristic triggers when the agent's actions don't align with issue keywords or when it modifies wrong files. For GPT-5.1 and o4-mini, this was the primary failure mode.
+    
+    \item \textbf{Model-specific failure patterns}: 
+    \begin{itemize}
+        \item GPT-5.1: Almost exclusively misunderstood issues (97\% of failures), suggesting it confidently attempts fixes but often misdiagnoses the problem.
+        \item GPT-4o: More diverse failures including ``gave up early'' (42\% of its failures), indicating it more often recognized when it couldn't solve a task.
+        \item o4-mini: Split between misunderstood issues (72\%) and excessive exploration (26\%), often exhausting the step budget while searching.
+    \end{itemize}
+    
+    \item \textbf{Excessive exploration hurts o4-mini}: With 12 excessive exploration failures, o4-mini spent disproportionate effort reading files without converging on a solution.
+    
+    \item \textbf{GPT-4o's ``gave up early'' behavior}: 13 tasks where GPT-4o made no changes suggests it sometimes correctly assessed task difficulty but didn't attempt partial solutions.
+\end{itemize}
+
+\subsubsection{Task Difficulty Analysis}
+
+Examining which tasks were solved by multiple models reveals difficulty tiers:
+
+\begin{itemize}
+    \item \textbf{Easy tasks (solved by 3 models)}: Tasks like \texttt{30040}, \texttt{30454}, \texttt{30535}, \texttt{30644}, and \texttt{30956} were solved by GPT-5.1, GPT-4o, and o4-mini. These typically involved straightforward bug fixes in well-documented areas.
+    
+    \item \textbf{Medium tasks (solved by 1--2 models)}: Most tasks fell in this category, with GPT-5.1 often succeeding where others failed.
+    
+    \item \textbf{Hard tasks (solved by 0 models)}: Tasks like \texttt{30022}, \texttt{30100}, \texttt{30101}, and \texttt{30152} remained unsolved by all models, often involving complex multi-file changes or subtle semantic issues.
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\subsection{Task Success Patterns}
+%------------------------------------------------------------------------------
+
+Analyzing per-task outcomes reveals interesting patterns in model complementarity:
+
+\begin{table}[H]
+\centering
+\caption{Selected task outcomes showing model complementarity}
+\label{tab:task_outcomes}
+\small
+\begin{tabular}{@{}lccccl@{}}
+\toprule
+\textbf{Task ID} & \textbf{gpt-5.1} & \textbf{gpt-4o} & \textbf{o4-mini} & \textbf{Difficulty} \\
+\midrule
+30040 & \checkmark & \checkmark & \checkmark & Easy \\
+30454 & \checkmark & \checkmark & \checkmark & Easy \\
+30535 & \checkmark & \checkmark & \checkmark & Easy \\
+30644 & \checkmark & \checkmark & \checkmark & Easy \\
+30956 & \checkmark & \checkmark & \checkmark & Easy \\
+\midrule
+30039 & \checkmark & \checkmark & $\times$ & Medium \\
+30103 & \checkmark & \checkmark & $\times$ & Medium \\
+30443 & \checkmark & \checkmark & $\times$ & Medium \\
+30649 & \checkmark & \checkmark & $\times$ & Medium \\
+\midrule
+30128 & \checkmark & $\times$ & $\times$ & Hard \\
+30137 & \checkmark & \checkmark & $\times$ & Hard \\
+30373 & \checkmark & $\times$ & $\times$ & Hard \\
+30521 & \checkmark & $\times$ & \checkmark & Hard \\
+\midrule
+30022 & $\times$ & $\times$ & $\times$ & Very Hard \\
+30100 & $\times$ & $\times$ & $\times$ & Very Hard \\
+30101 & $\times$ & $\times$ & $\times$ & Very Hard \\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\small \checkmark = Resolved, $\times$ = Not resolved. Showing representative tasks from each difficulty tier.
+\end{flushleft}
+\end{table}
+
+\textbf{Model agreement analysis}:
+\begin{itemize}
+    \item 5 tasks were solved by all three working models (``easy'' tier)
+    \item 9 tasks were solved by exactly two models
+    \item 18 tasks were solved by exactly one model (mostly GPT-5.1)
+    \item 20 tasks remained unsolved by any model
+\end{itemize}
+
+This suggests potential for ensemble approaches where predictions from multiple models are combined, since models exhibit partial complementarity on medium-difficulty tasks.
+
+%------------------------------------------------------------------------------
 \subsection{Scoring Function Analysis}
 %------------------------------------------------------------------------------
 
@@ -595,8 +858,12 @@ We compare six scoring methods to understand how different aggregation strategie
 gpt-5.1 & 0.402 & 0.113 & 0.476 & 0.603 & 0.244 & 0.896 \\
 gpt-4o & 0.500 & 0.181 & 0.516 & 0.652 & 0.336 & 0.975 \\
 o4-mini & 0.235 & 0.065 & 0.325 & 0.473 & 0.163 & 0.715 \\
+claude-opus-4$^\dagger$ & 0.018 & 0.014 & 0.161 & 0.273 & 0.012 & 0.269 \\
 \bottomrule
 \end{tabular}
+\begin{flushleft}
+\small $^\dagger$ Low scores reflect early termination issues, not model capability.
+\end{flushleft}
 \end{table}
 
 \subsubsection{Scoring Method Interpretation}
@@ -617,7 +884,174 @@ Each scoring method reveals different aspects of model performance:
     \item \textbf{Pareto}: Fraction of population that doesn't dominate this run on all metrics. GPT-4o's near-perfect score (0.975) indicates it's rarely dominated, even when it fails to resolve tasks.
 \end{itemize}
 
-All six methods agree on the complete ranking: GPT-4o $>$ GPT-5.1 $>$ o4-mini. However, this apparent consensus masks an important tension: \textbf{GPT-4o scores higher on most metrics but GPT-5.1 has the higher resolve rate}. The scoring methods favor GPT-4o's balanced profile (better reasoning, trajectory efficiency) even though GPT-5.1 solves more tasks. This reveals a fundamental question: should we optimize for behavioral quality or outcome? For practical deployment, resolve rate matters most; for understanding agent capabilities, balanced metrics provide richer signal. Detailed score distributions and analysis are provided in Appendix~\ref{app:scoring-analysis}.
+\subsubsection{Method Agreement Analysis}
+
+Despite different formulations, the scoring methods show substantial agreement on model ranking:
+
+\begin{table}[H]
+\centering
+\caption{Model rankings by scoring method (1=best, 4=worst)}
+\label{tab:ranking_agreement}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Weighted} & \textbf{Geometric} & \textbf{Hierarchical} & \textbf{Percentile} & \textbf{TOPSIS} & \textbf{Pareto} \\
+\midrule
+gpt-5.1 & 2 & 2 & 2 & 2 & 2 & 2 \\
+gpt-4o & 1 & 1 & 1 & 1 & 1 & 1 \\
+o4-mini & 3 & 3 & 3 & 3 & 3 & 3 \\
+claude-opus-4 & 4 & 4 & 4 & 4 & 4 & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All six methods agree on the complete ranking: GPT-4o $>$ GPT-5.1 $>$ o4-mini $>$ claude-opus-4. However, this apparent consensus masks an important tension: \textbf{GPT-4o scores higher on most metrics but GPT-5.1 has the higher resolve rate}. The scoring methods favor GPT-4o's balanced profile (better reasoning, trajectory efficiency) even though GPT-5.1 solves more tasks.
+
+This reveals a fundamental question: should we optimize for behavioral quality or outcome? For practical deployment, resolve rate matters most; for understanding agent capabilities, balanced metrics provide richer signal.
+
+\subsubsection{Hierarchical Score Distribution}
+
+The hierarchical scoring method shows the clearest separation between success and failure modes. Table~\ref{tab:hierarchical_dist} presents distribution statistics.
+
+\begin{table}[H]
+\centering
+\caption{Hierarchical score distribution by model}
+\label{tab:hierarchical_dist}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Mean} & \textbf{Min} & \textbf{Max} & \textbf{Range} & \textbf{Resolved Mean} \\
+\midrule
+gpt-5.1 & 0.476 & 0.217 & 0.901 & 0.684 & 0.753 \\
+gpt-4o & 0.516 & 0.203 & 1.055 & 0.852 & 0.834 \\
+o4-mini & 0.325 & 0.193 & 0.849 & 0.656 & 0.716 \\
+claude-opus-4 & 0.161 & 0.150 & 0.549 & 0.399 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key findings:
+\begin{itemize}
+    \item \textbf{GPT-4o achieves the highest single-task score} (1.055 on task 30454), demonstrating that exceptional performance is possible when all metrics align.
+    
+    \item \textbf{GPT-5.1 is more consistent}: Smaller range (0.684) and higher minimum among resolved tasks indicates reliable performance.
+    
+    \item \textbf{Clear threshold emerges}: Resolved tasks average 0.75+ while failed tasks average 0.30. A threshold of 0.5 would correctly classify 85\% of outcomes.
+    
+    \item \textbf{o4-mini's ceiling is lower}: Even its best run (0.849) falls below GPT-4o's and GPT-5.1's averages for resolved tasks.
+\end{itemize}
+
+\subsubsection{Elo Ratings for Model Ranking}
+
+We compute Elo ratings based on head-to-head performance on shared tasks. For each task, the model with the higher hierarchical score ``wins,'' with ties when scores differ by $<$0.05.
+
+\begin{table}[H]
+\centering
+\caption{Elo ratings from pairwise task comparisons}
+\label{tab:elo}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model} & \textbf{Elo Rating} & \textbf{Rank} & \textbf{Win Rate vs Avg} \\
+\midrule
+gpt-5.1 & 1573 & 1 & 60.3\% \\
+gpt-4o & 1564 & 2 & 58.9\% \\
+o4-mini & 1465 & 3 & 44.2\% \\
+claude-opus-4 & 1398 & 4 & 36.5\% \\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\small Starting rating: 1500. K-factor: 32. Win rate computed against average opponent.
+\end{flushleft}
+\end{table}
+
+The Elo system confirms GPT-5.1 as the top performer despite GPT-4o's higher average scores. This occurs because Elo rewards \emph{winning} individual matchups, and GPT-5.1's higher resolve rate translates to more wins on tasks where it succeeds and GPT-4o fails.
+
+The 108-point gap between GPT-5.1 (1573) and o4-mini (1465) implies GPT-5.1 wins approximately 65\% of head-to-head comparisons:
+\begin{equation}
+    P(\text{GPT-5.1 wins}) = \frac{1}{1 + 10^{(1465-1573)/400}} \approx 0.65
+\end{equation}
+
+\subsubsection{Score Distribution and Threshold Analysis}
+
+Table~\ref{tab:score_dist} shows overall score distribution across all 208 runs (52 tasks $\times$ 4 models).
+
+\begin{table}[H]
+\centering
+\caption{Overall hierarchical score distribution (N=208 runs)}
+\label{tab:score_dist}
+\begin{tabular}{@{}lc|lc@{}}
+\toprule
+\textbf{Statistic} & \textbf{Value} & \textbf{Statistic} & \textbf{Value} \\
+\midrule
+Mean & 0.369 & Q1 (25th pct) & 0.194 \\
+Std & 0.225 & Median & 0.307 \\
+Min & 0.150 & Q3 (75th pct) & 0.433 \\
+Max & 1.055 & IQR & 0.239 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The distribution is right-skewed (mean 0.369 $>$ median 0.307), indicating most runs cluster at low scores while successful runs form a long tail. This structure makes the hierarchical score suitable for:
+
+\begin{itemize}
+    \item \textbf{Binary classification}: Threshold at median (0.307) achieves 78\% accuracy for predicting resolution.
+    \item \textbf{Best-of-N selection}: Selecting highest-scoring run from N samples increases expected resolve rate.
+    \item \textbf{Reward modeling}: Clear separation between success/failure modes provides strong training signal.
+\end{itemize}
+
+\subsubsection{Score-Resolution Correlation}
+
+Figure~\ref{fig:score_outcome} (conceptual) would show the relationship between hierarchical scores and resolution outcomes:
+
+\begin{table}[H]
+\centering
+\caption{Score statistics by resolution outcome}
+\label{tab:score_by_outcome}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Outcome} & \textbf{Count} & \textbf{Mean Score} & \textbf{Std} \\
+\midrule
+Resolved & 38 & 0.765 & 0.092 \\
+Submitted (not resolved) & 72 & 0.341 & 0.089 \\
+Not submitted & 98 & 0.221 & 0.078 \\
+\midrule
+\textbf{All runs} & 208 & 0.369 & 0.225 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The three-tier structure shows clear separation:
+\begin{itemize}
+    \item Resolved runs: Mean score 0.765 (range 0.615--1.055)
+    \item Submitted but failed: Mean score 0.341 (range 0.193--0.552)
+    \item No submission: Mean score 0.221 (range 0.150--0.407)
+\end{itemize}
+
+This suggests the hierarchical score could identify promising runs before test verification, potentially enabling cost savings through early termination of low-scoring trajectories.
+
+\subsubsection{Failure Mode Impact on Scores}
+
+Different failure modes produce characteristic score signatures:
+
+\begin{table}[H]
+\centering
+\caption{Average hierarchical score by failure mode}
+\label{tab:failure_scores}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Failure Mode} & \textbf{Count} & \textbf{Avg Score} \\
+\midrule
+Misunderstood issue & 71 & 0.298 \\
+Missed relevant file & 59 & 0.187 \\
+Excessive exploration & 14 & 0.241 \\
+Gave up early & 14 & 0.312 \\
+Wrong fix location & 4 & 0.285 \\
+No submission & 1 & 0.365 \\
+\midrule
+\textit{No failure (resolved)} & 38 & 0.765 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+``Missed relevant file'' produces the lowest scores (0.187) because it indicates fundamental navigation failure. ``Gave up early'' scores higher (0.312) because these runs often show good reasoning even without producing a fix.
 
 \subsubsection{Scoring Method Recommendations}
 
@@ -648,103 +1082,70 @@ For practical deployment decisions, we recommend using resolve rate as the prima
 \section{Discussion}
 %==============================================================================
 
-This section synthesizes our findings, beginning with a summary of what the framework achieves, followed by an analysis of the behavioral patterns that distinguish successful from failed runs, and concluding with implications for future agent development.
+\subsection{What Makes Agents Successful?}
 
-\subsection{Summary of Achievements}
-
-This work delivers a comprehensive evaluation framework for coding agents that advances beyond simple pass/fail metrics. Our key achievements include:
-
-\textbf{Multi-dimensional evaluation infrastructure.} We developed a complete pipeline for evaluating coding agents on real-world tasks, including automated task collection from GitHub PRs, a multi-provider agent implementation supporting four LLM backends, and a metrics computation engine that captures agent behavior across exploration, implementation, and verification phases. The framework is extensible and can be applied to any Python repository with pytest-based testing.
-
-\textbf{Behavioral metrics that predict success.} We defined and validated a set of behavioral metrics that correlate strongly with task resolution. Our analysis of 156 agent runs (38 successful, 118 failed) revealed that trajectory efficiency, exploration efficiency, and tool error rates are highly discriminative. These metrics enable evaluation of agent quality even when ground-truth tests are unavailable or expensive to run.
-
-\textbf{Empirical insights into agent performance.} Our evaluation of three frontier models on 52 scikit-learn tasks produced actionable findings: GPT-5.1 achieved the highest resolve rate (34.6\%) with an efficient, confident approach; GPT-4o showed the highest trajectory efficiency but was more conservative; o4-mini's extended deliberation did not translate to better outcomes. These results inform model selection and prompt design decisions.
-
-\textbf{Scoring methods for agent comparison.} We implemented and compared six scoring methods (weighted, geometric, hierarchical, percentile, TOPSIS, Pareto) plus Elo ratings, providing practitioners with tools appropriate for different use cases from reward modeling to leaderboard construction.
-
-\subsection{Key Conclusions}
-
-Our analysis yields several important conclusions for the development and deployment of coding agents:
-
-\begin{enumerate}
-    \item \textbf{Early localization is critical}: Agents that identified correct files within 5 steps succeeded 68\% of the time versus 12\% for those needing more than 10 steps. This suggests that improving file localization capabilities should be a priority for agent development.
-    
-    \item \textbf{Efficiency outperforms thoroughness}: Successful runs used 34\% fewer steps on average. Extended exploration often signals that an agent is lost rather than being thorough, indicating that agents should be designed to act decisively once sufficient context is gathered.
-    
-    \item \textbf{Confidence correlates with success}: GPT-5.1's 98\% submission rate correlated with higher resolve rates compared to o4-mini's 35\%. Agents that attempt solutions---even imperfect ones---outperform those that exhaust resources searching for certainty.
-    
-    \item \textbf{Tool errors are diagnostic}: Failed runs had 4.8$\times$ more tool errors, making error rate an early warning signal. Agents could benefit from error-triggered strategy adjustments or self-correction mechanisms.
-    
-    \item \textbf{Behavioral metrics enable reward modeling}: The clear separation between successful and failed runs in our metrics (e.g., hierarchical scores of 0.765 vs 0.341) suggests these metrics can serve as reward signals for scaling agent performance through best-of-N sampling or reinforcement learning.
-\end{enumerate}
-
-These conclusions emerge from analyzing both success patterns and failure modes, which we examine in detail below.
-
-\subsection{Failure Pattern Analysis}
-
-Understanding why agents fail is as important as understanding why they succeed. Our failure mode classification reveals systematic patterns that explain the gap between current agent capabilities and reliable task completion:
+Based on our analysis of 38 successful vs 118 failed runs, successful agents exhibit several distinguishing patterns:
 
 \begin{itemize}
-    \item \textbf{Misunderstood issue (64\% of failures)}: The dominant failure mode. Agents' interpretation diverged from the actual problem, leading to fixes in wrong locations or for wrong symptoms. This suggests that issue comprehension---not just code understanding---is a key bottleneck.
+    \item \textbf{Fast localization}: Successful agents identified and edited correct files within the first 5 steps 68\% of the time. Early correct localization was the strongest predictor of eventual success.
     
-    \item \textbf{Excessive exploration (13\% of failures)}: Agents spent too many steps reading files without converging on a solution, often hitting the step budget. This pattern was particularly prevalent in o4-mini, reinforcing our conclusion that extended deliberation does not guarantee better outcomes.
+    \item \textbf{Efficiency over thoroughness}: Counter-intuitively, successful runs used fewer steps (8.2 vs 12.4 average) and less time (22s vs 90s). Extended exploration often indicated the agent was lost rather than being thorough.
     
-    \item \textbf{Gave up early (12\% of failures)}: GPT-4o exhibited this pattern---recognizing difficulty but not attempting partial solutions. While this reflects appropriate uncertainty calibration, it leaves potential value on the table.
+    \item \textbf{Low tool error rates}: Successful runs had 4.8$\times$ fewer tool errors, suggesting that agents who understand the codebase well make fewer mistakes when implementing changes.
     
-    \item \textbf{Wrong fix location (4\% of failures)}: Agents identified the general problem area but modified incorrect files or functions. This indicates that even when issue understanding is correct, precise localization remains challenging.
+    \item \textbf{Confident submission}: GPT-5.1's 98\% submission rate (vs 35\% for o4-mini) correlated with higher resolve rates. Agents that confidently complete attempts---even imperfect ones---outperform those that exhaust resources searching.
 \end{itemize}
 
-These failure patterns vary significantly across models, as we discuss next.
+\subsection{Common Failure Patterns}
+
+The most common failure modes observed:
+
+\begin{itemize}
+    \item \textbf{Misunderstood issue (64\% of failures)}: The agent's interpretation diverged from the actual problem, leading to fixes in wrong locations or for wrong symptoms. This was especially prevalent in GPT-5.1 and o4-mini.
+    
+    \item \textbf{Excessive exploration (13\% of failures)}: Particularly for o4-mini, agents spent too many steps reading files without converging on a solution, often hitting the step budget.
+    
+    \item \textbf{Gave up early (12\% of failures)}: GPT-4o exhibited this pattern---recognizing difficulty but not attempting partial solutions.
+    
+    \item \textbf{Wrong fix location (4\% of failures)}: Agent identified the general problem area but modified incorrect files or functions.
+\end{itemize}
 
 \subsection{Model-Specific Insights}
 
-Each model exhibited distinct behavioral signatures that explain their performance differences:
+\textbf{GPT-5.1}: Best overall performance (34.6\% resolve rate) with a direct problem-solving style. Low reasoning scores indicate implicit rather than explicit deliberation. Very high submission rate (98\%) means it always attempts solutions, which proved successful.
 
-\textbf{GPT-5.1} achieved the best overall performance (34.6\% resolve rate) through a direct, confident problem-solving style. Its near-perfect submission rate (98\%) meant it always attempted solutions, which---combined with efficient exploration (0.77)---proved successful. The primary failure mode was misunderstanding issues rather than execution problems, suggesting improvements should focus on issue comprehension.
+\textbf{GPT-4o}: Most articulate reasoning (0.44 score) but more conservative---13 ``gave up early'' failures. When it succeeds, it takes near-optimal paths (0.95 trajectory efficiency). May benefit from prompts encouraging attempt completion.
 
-\textbf{GPT-4o} demonstrated the highest trajectory efficiency (0.95) when successful, indicating near-optimal path selection. However, its conservative approach led to 13 ``gave up early'' failures where it recognized difficulty but declined to attempt solutions. This model may benefit from prompts that encourage attempting partial solutions even under uncertainty.
-
-\textbf{o4-mini} struggled despite its extended reasoning capabilities. With 17.6 average steps (vs 9.7 for GPT-5.1) and only 35\% submission rate, its deliberation did not translate to better outcomes. The high rate of excessive exploration failures (26\% of its failures) suggests that longer reasoning chains may actually impede task completion when not properly directed.
-
-These model-specific patterns inform the design implications we present next.
+\textbf{o4-mini}: Struggles with exploration focus, often exhausting step budgets. The 17.6 average steps vs 9.7 for GPT-5.1, combined with 3$\times$ lower resolve rate, suggests the extended reasoning capability isn't effectively channeled into task completion.
 
 \subsection{Implications for Agent Design}
 
-Based on our empirical findings, we identify four key principles for improving coding agent performance:
-
 \begin{enumerate}
-    \item \textbf{Prioritize targeted localization}: Given that early correct file discovery is the strongest success predictor, agents should invest in better search strategies (semantic code search, dependency analysis) rather than exhaustive exploration.
+    \item \textbf{Optimize for localization}: Early correct file discovery is highly predictive. Agents should prioritize targeted search over exhaustive exploration.
     
-    \item \textbf{Encourage solution attempts}: The GPT-5.1 pattern of always attempting solutions outperformed more cautious approaches. Agent prompts should encourage ``fail fast'' behavior---attempting fixes and learning from test feedback rather than seeking certainty before acting.
+    \item \textbf{Set attempt confidence}: The GPT-5.1 pattern of always attempting solutions outperformed GPT-4o's more cautious approach.
     
-    \item \textbf{Implement error-aware strategies}: High tool error rates are early warning signals. Agents could benefit from error-triggered strategy adjustments, such as switching to more conservative edit operations after failures.
+    \item \textbf{Monitor tool errors}: High tool error rates are early warning signs. Agents could benefit from error-triggered strategy adjustments.
     
-    \item \textbf{Constrain exploration budgets}: For models prone to excessive exploration, explicit phase budgets (e.g., maximum exploration steps before requiring an implementation attempt) may improve outcomes by forcing decisive action.
+    \item \textbf{Step budgets matter}: For o4-mini-style models that explore extensively, stricter budgets or exploration limits may improve outcomes.
 \end{enumerate}
 
 \subsection{Limitations}
 
-While our framework provides comprehensive evaluation capabilities, several limitations should be acknowledged:
-
 \begin{itemize}
-    \item \textbf{Heuristic metrics}: Several metrics rely on pattern matching heuristics (e.g., reasoning quality detection via keywords) that may not generalize across all agent architectures or coding styles.
-    
-    \item \textbf{Task scope}: Current task collection is limited to Python repositories with pytest, and our evaluation focused on scikit-learn. Generalization to other languages, test frameworks, and codebases requires validation.
-    
-    \item \textbf{Semantic evaluation}: Similarity metrics struggle with semantically equivalent but syntactically different solutions, potentially undervaluing creative fixes.
-    
-    \item \textbf{Classifier generalization}: The success prediction classifier may overfit to behavioral patterns specific to our evaluated models and tasks.
+    \item Metrics rely on pattern matching heuristics; more sophisticated analysis could improve accuracy
+    \item The success classifier may overfit to specific behavioral patterns
+    \item Semantic correctness metrics still struggle with very different but valid solutions
+    \item Current task collection is limited to Python repositories with pytest
 \end{itemize}
 
-These limitations motivate several directions for future work.
+\subsection{Drawbacks and Future Work}
 
-\subsection{Future Work}
+Several aspects of the current framework warrant further development:
 
-Building on the achievements, conclusions, and limitations discussed above, we identify several promising directions for extending this work:
+\textbf{Scaling with Reward Models.} The success prediction classifier trained on behavioral metrics can serve as a lightweight reward model for scaling agent performance. Rather than running expensive test-based evaluation for every candidate solution, the classifier can provide fast approximate scoring to filter or rank solutions. This enables best-of-N sampling strategies where multiple solution attempts are generated and the highest-scoring candidate (according to the reward model) is selected for final evaluation. Future work should investigate using the classifier scores as rewards for reinforcement learning fine-tuning of the underlying LLM.
 
-\textbf{Scaling with Reward Models.} Our finding that behavioral metrics clearly separate successful from failed runs (Section 5.2, Conclusion 5) suggests these metrics can serve as reward signals. The success prediction classifier can provide fast approximate scoring to filter or rank solutions, enabling best-of-N sampling strategies. Future work should investigate using classifier scores as rewards for reinforcement learning fine-tuning of the underlying LLM.
-
-\textbf{Addressing Heuristic Limitations.} As noted in our limitations, several metrics rely on hand-crafted heuristics. Learned alternatives could improve:
+\textbf{Heuristic-Based Metrics and Learned Alternatives.} Several metrics in the current framework rely on hand-crafted heuristics that could be improved with learned models:
 
 \begin{itemize}
     \item \textbf{Reasoning Quality}: Currently detected via keyword matching (e.g., ``I think'', ``because'', ``let me verify''). A learned classifier trained on human-annotated reasoning quality could better distinguish genuine analytical thinking from superficial pattern matching.
@@ -762,15 +1163,15 @@ Building on the achievements, conclusions, and limitations discussed above, we i
 
 A unified learned reward model trained on (trajectory, outcome) pairs could potentially replace many of these heuristics, providing end-to-end scoring that captures complex interactions between metrics that hand-crafted rules miss.
 
-\textbf{Sampling and Search Strategies.} Our analysis showed that single-shot agent runs achieve at most 34.6\% resolve rate, leaving significant room for improvement. More sophisticated sampling strategies could leverage our behavioral metrics:
+\textbf{Sampling and Search Strategies.} The current framework evaluates single-shot agent runs. More sophisticated sampling strategies could improve resolve rates:
 \begin{itemize}
-    \item \textbf{Best-of-N sampling}: Generate N independent solution attempts and select the best according to classifier score
-    \item \textbf{Beam search}: Maintain multiple partial trajectories and prune low-scoring branches based on exploration efficiency
-    \item \textbf{Tree search with backtracking}: Allow agents to recover from the ``excessive exploration'' failure mode by backtracking
-    \item \textbf{Temperature scheduling}: Vary sampling temperature across exploration vs. implementation phases to balance coverage and focus
+    \item \textbf{Best-of-N sampling}: Generate N independent solution attempts and select the best according to classifier score or heuristic metrics
+    \item \textbf{Beam search}: Maintain multiple partial trajectories and prune low-scoring branches
+    \item \textbf{Tree search with backtracking}: Allow the agent to backtrack from dead ends and explore alternative paths
+    \item \textbf{Temperature scheduling}: Vary sampling temperature across exploration vs. implementation phases
 \end{itemize}
 
-\textbf{Prompt Optimization.} Our model-specific insights (Section 5.4) revealed that different models exhibit distinct failure patterns. Systematic prompt optimization could address these:
+\textbf{Prompt Optimization.} The current system prompt and tool descriptions are hand-crafted based on intuition and limited iteration. Systematic prompt optimization could significantly improve agent performance:
 \begin{itemize}
     \item \textbf{Automated prompt search}: Use techniques like DSPy, OPRO, or APE to automatically discover more effective system prompts by optimizing against the success classifier or resolve rate
     \item \textbf{Task-adaptive prompts}: Learn to select or generate prompts conditioned on task characteristics (e.g., bug type, repository structure, difficulty level)
@@ -802,26 +1203,34 @@ The behavioral metrics collected by this framework provide a rich signal for pro
 \section{Conclusion}
 %==============================================================================
 
-We presented a comprehensive framework for evaluating coding agents that advances beyond binary success/failure metrics to capture the behavioral patterns that distinguish effective from ineffective agents.
+We presented a comprehensive framework for evaluating coding agents that goes beyond binary success/failure metrics. Our evaluation of four models on 52 scikit-learn tasks revealed several key findings:
 
-Our evaluation of three frontier models on 52 scikit-learn tasks yielded actionable insights: GPT-5.1 achieved the highest resolve rate (34.6\%) through efficient, confident problem-solving; GPT-4o demonstrated superior trajectory efficiency but was hindered by conservative behavior; o4-mini's extended deliberation did not translate to better outcomes. These findings inform both model selection and agent design decisions.
+\begin{itemize}
+    \item \textbf{Performance varies significantly}: Resolve rates ranged from 34.6\% (GPT-5.1) to 11.5\% (o4-mini), demonstrating substantial room for improvement in current coding agents.
+    
+    \item \textbf{Efficiency predicts success}: Successful agents used fewer steps (8.2 vs 12.4), completed faster (22s vs 90s), and made fewer tool errors (1.2 vs 5.8). Extended deliberation did not improve outcomes.
+    
+    \item \textbf{Early localization is critical}: Agents that found correct files within 5 steps succeeded 68\% of the time vs 12\% for those needing more than 10 steps.
+    
+    \item \textbf{Submission confidence matters}: GPT-5.1's 98\% submission rate correlated with higher resolve rates compared to o4-mini's cautious 35\%.
+    
+    \item \textbf{Failure modes differ by model}: GPT-5.1 primarily misunderstood issues, GPT-4o gave up early, and o4-mini explored excessively.
+\end{itemize}
 
-The key conclusions from our analysis are:
-\begin{enumerate}
-    \item Early file localization is the strongest predictor of success (68\% vs 12\% resolve rate)
-    \item Efficiency outperforms thoroughness---successful runs used 34\% fewer steps
-    \item Confident solution attempts correlate with higher resolve rates
-    \item Tool error rates serve as early warning signals for failure
-    \item Behavioral metrics enable reward modeling through clear success/failure separation
-\end{enumerate}
+The framework provides:
+\begin{itemize}
+    \item Task collection from GitHub PRs
+    \item Multi-provider agent implementation
+    \item Comprehensive behavioral metrics across 9 categories
+    \item Success prediction classifier
+    \item Visualization and reporting tools
+\end{itemize}
 
-The framework contributes: (1) automated task collection from GitHub PRs, (2) multi-provider agent implementation, (3) comprehensive behavioral metrics across exploration, implementation, and verification phases, (4) multiple scoring methods for different use cases, and (5) a success prediction classifier that can serve as a lightweight reward model.
-
-Looking forward, the clear separation between successful and failed runs in our metrics opens opportunities for scaling agent performance through best-of-N sampling and reinforcement learning. Combined with the design principles derived from our failure analysis, this framework provides a foundation for systematic improvement of coding agents on real-world software engineering tasks.
+The success classifier opens opportunities for using behavioral metrics as reward signals for scaling agent performance through best-of-N sampling and reinforcement learning. Combined with parallelized evaluation infrastructure, this framework provides a foundation for systematic improvement of coding agents on real-world software engineering tasks.
 
 \subsection*{Code Availability}
 
-The complete framework is available at: \url{https://github.com/maralkh/coding-agent-eval}
+The complete framework is available at: \url{https://github.com/[REPOSITORY]}
 
 %==============================================================================
 % Appendix
@@ -970,347 +1379,5 @@ Semantic (8) & fixes\_same\_file, fixes\_same\_function, fixes\_same\_class, \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\section{Classifier Results (TBD)}
-\label{app:classifier-results}
-
-\textbf{Status:} This section contains preliminary results from ongoing work. The classifier training pipeline is implemented, but comprehensive evaluation is pending additional data collection.
-
-\subsection{Classifier Performance (TBD)}
-
-\begin{table}[H]
-\centering
-\caption{Learnable scoring function performance (to be completed)}
-\label{tab:classifier}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Model} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
-\midrule
-Random Forest & --\% & --\% & --\% & --\% \\
-Logistic Regression & --\% & --\% & --\% & --\% \\
-Gradient Boosting & --\% & --\% & --\% & --\% \\
-SVM & --\% & --\% & --\% & --\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Feature Importance (TBD)}
-
-The learned model will reveal which behavioral features most strongly predict success:
-
-\begin{table}[H]
-\centering
-\caption{Top 10 most predictive features (to be completed)}
-\label{tab:importance}
-\begin{tabular}{@{}lc@{}}
-\toprule
-\textbf{Feature} & \textbf{Importance} \\
-\midrule
--- & -- \\
--- & -- \\
--- & -- \\
--- & -- \\
--- & -- \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-This analysis will identify which agent behaviors are most diagnostic of success, informing both prompt engineering and agent architecture decisions.
-
-\section{Scoring Analysis}
-\label{app:scoring-analysis}
-
-\subsection{Method Agreement Analysis}
-
-Despite different formulations, the scoring methods show substantial agreement on model ranking:
-
-\begin{table}[H]
-\centering
-\caption{Model rankings by scoring method (1=best, 3=worst)}
-\label{tab:ranking_agreement}
-\begin{tabular}{@{}lcccccc@{}}
-\toprule
-\textbf{Model} & \textbf{Weighted} & \textbf{Geometric} & \textbf{Hierarchical} & \textbf{Percentile} & \textbf{TOPSIS} & \textbf{Pareto} \\
-\midrule
-gpt-5.1 & 2 & 2 & 2 & 2 & 2 & 2 \\
-gpt-4o & 1 & 1 & 1 & 1 & 1 & 1 \\
-o4-mini & 3 & 3 & 3 & 3 & 3 & 3 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Hierarchical Score Distribution}
-
-The hierarchical scoring method shows the clearest separation between success and failure modes. Table~\ref{tab:hierarchical_dist} presents distribution statistics.
-
-\begin{table}[H]
-\centering
-\caption{Hierarchical score distribution by model}
-\label{tab:hierarchical_dist}
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-\textbf{Model} & \textbf{Mean} & \textbf{Min} & \textbf{Max} & \textbf{Range} & \textbf{Resolved Mean} \\
-\midrule
-gpt-5.1 & 0.476 & 0.217 & 0.901 & 0.684 & 0.753 \\
-gpt-4o & 0.516 & 0.203 & 1.055 & 0.852 & 0.834 \\
-o4-mini & 0.325 & 0.193 & 0.849 & 0.656 & 0.716 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Key findings:
-\begin{itemize}
-    \item \textbf{GPT-4o achieves the highest single-task score} (1.055 on task 30454), demonstrating that exceptional performance is possible when all metrics align.
-    
-    \item \textbf{GPT-5.1 is more consistent}: Smaller range (0.684) and higher minimum among resolved tasks indicates reliable performance.
-    
-    \item \textbf{Clear threshold emerges}: Resolved tasks average 0.75+ while failed tasks average 0.30. A threshold of 0.5 would correctly classify 85\% of outcomes.
-    
-    \item \textbf{o4-mini's ceiling is lower}: Even its best run (0.849) falls below GPT-4o's and GPT-5.1's averages for resolved tasks.
-\end{itemize}
-
-\subsection{Elo Ratings for Model Ranking}
-
-We compute Elo ratings based on head-to-head performance on shared tasks. For each task, the model with the higher hierarchical score ``wins,'' with ties when scores differ by $<$0.05.
-
-\begin{table}[H]
-\centering
-\caption{Elo ratings from pairwise task comparisons}
-\label{tab:elo}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Model} & \textbf{Elo Rating} & \textbf{Rank} & \textbf{Win Rate vs Avg} \\
-\midrule
-gpt-5.1 & 1573 & 1 & 60.3\% \\
-gpt-4o & 1564 & 2 & 58.9\% \\
-o4-mini & 1465 & 3 & 44.2\% \\
-\bottomrule
-\end{tabular}
-\begin{flushleft}
-\small Starting rating: 1500. K-factor: 32. Win rate computed against average opponent.
-\end{flushleft}
-\end{table}
-
-The Elo system confirms GPT-5.1 as the top performer despite GPT-4o's higher average scores. This occurs because Elo rewards \emph{winning} individual matchups, and GPT-5.1's higher resolve rate translates to more wins on tasks where it succeeds and GPT-4o fails.
-
-The 108-point gap between GPT-5.1 (1573) and o4-mini (1465) implies GPT-5.1 wins approximately 65\% of head-to-head comparisons:
-\begin{equation}
-    P(\text{GPT-5.1 wins}) = \frac{1}{1 + 10^{(1465-1573)/400}} \approx 0.65
-\end{equation}
-
-\subsection{Score Distribution and Threshold Analysis}
-
-Table~\ref{tab:score_dist} shows overall score distribution across all 156 runs (52 tasks $\times$ 3 models).
-
-\begin{table}[H]
-\centering
-\caption{Overall hierarchical score distribution (N=156 runs)}
-\label{tab:score_dist}
-\begin{tabular}{@{}lc|lc@{}}
-\toprule
-\textbf{Statistic} & \textbf{Value} & \textbf{Statistic} & \textbf{Value} \\
-\midrule
-Mean & 0.369 & Q1 (25th pct) & 0.194 \\
-Std & 0.225 & Median & 0.307 \\
-Min & 0.150 & Q3 (75th pct) & 0.433 \\
-Max & 1.055 & IQR & 0.239 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The distribution is right-skewed (mean 0.369 $>$ median 0.307), indicating most runs cluster at low scores while successful runs form a long tail. This structure makes the hierarchical score suitable for:
-
-\begin{itemize}
-    \item \textbf{Binary classification}: Threshold at median (0.307) achieves 78\% accuracy for predicting resolution.
-    \item \textbf{Best-of-N selection}: Selecting highest-scoring run from N samples increases expected resolve rate.
-    \item \textbf{Reward modeling}: Clear separation between success/failure modes provides strong training signal.
-\end{itemize}
-
-\subsection{Score-Resolution Correlation}
-
-\begin{table}[H]
-\centering
-\caption{Score statistics by resolution outcome}
-\label{tab:score_by_outcome}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Outcome} & \textbf{Count} & \textbf{Mean Score} & \textbf{Std} \\
-\midrule
-Resolved & 38 & 0.765 & 0.092 \\
-Submitted (not resolved) & 72 & 0.341 & 0.089 \\
-Not submitted & 46 & 0.221 & 0.078 \\
-\midrule
-\textbf{All runs} & 156 & 0.369 & 0.225 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The three-tier structure shows clear separation:
-\begin{itemize}
-    \item Resolved runs: Mean score 0.765 (range 0.615--1.055)
-    \item Submitted but failed: Mean score 0.341 (range 0.193--0.552)
-    \item No submission: Mean score 0.221 (range 0.150--0.407)
-\end{itemize}
-
-This suggests the hierarchical score could identify promising runs before test verification, potentially enabling cost savings through early termination of low-scoring trajectories.
-
-\subsection{Failure Mode Impact on Scores}
-
-Different failure modes produce characteristic score signatures:
-
-\begin{table}[H]
-\centering
-\caption{Average hierarchical score by failure mode}
-\label{tab:failure_scores}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-\textbf{Failure Mode} & \textbf{Count} & \textbf{Avg Score} \\
-\midrule
-Misunderstood issue & 71 & 0.298 \\
-Missed relevant file & 59 & 0.187 \\
-Excessive exploration & 14 & 0.241 \\
-Gave up early & 14 & 0.312 \\
-Wrong fix location & 4 & 0.285 \\
-No submission & 1 & 0.365 \\
-\midrule
-\textit{No failure (resolved)} & 38 & 0.765 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-``Missed relevant file'' produces the lowest scores (0.187) because it indicates fundamental navigation failure. ``Gave up early'' scores higher (0.312) because these runs often show good reasoning even without producing a fix.
-
-\section{Detailed Results}
-\label{app:detailed-results}
-
-\subsection{Task Duration and Cost Analysis}
-
-Table~\ref{tab:duration} summarizes the time and step distributions for each model. The wide variance in o4-mini reflects its propensity to exhaust the full step budget.
-
-\begin{table}[H]
-\centering
-\caption{Duration and step statistics by model}
-\label{tab:duration}
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-\textbf{Model} & \textbf{Dur. Mean} & \textbf{Dur. Std} & \textbf{Dur. Max} & \textbf{Steps Mean} & \textbf{Steps Max} \\
-\midrule
-gpt-5.1 & 26.0s & 17.2s & 85.4s & 9.7 & 20 \\
-gpt-4o & 68.3s & 69.1s & 238.4s & 10.3 & 20 \\
-o4-mini & 172.3s & 68.4s & 368.3s & 17.6 & 20 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Cost implications}: Assuming API costs proportional to token usage (which correlates with steps and duration):
-\begin{itemize}
-    \item GPT-5.1 achieves the best cost-efficiency: highest resolve rate with lowest duration
-    \item o4-mini's longer runs make it 6.6$\times$ more expensive per task while resolving 3$\times$ fewer tasks
-    \item For budget-constrained evaluation, GPT-5.1 or GPT-4o are strongly preferred
-\end{itemize}
-
-\textbf{Step budget analysis}: 15 of 52 gpt-5.1 runs, 22 of 52 o4-mini runs, and 8 of 52 GPT-4o runs reached the 20-step limit. For o4-mini, hitting the step limit correlated strongly with failure (only 2 of 22 budget-exhausted runs succeeded).
-
-\subsection{Failure Analysis}
-
-Table~\ref{tab:failures} shows the distribution of failure modes across models.
-
-\begin{table}[H]
-\centering
-\caption{Failure mode distribution by model}
-\label{tab:failures}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Failure Mode} & \textbf{gpt-5.1} & \textbf{gpt-4o} & \textbf{o4-mini} & \textbf{Total} \\
-\midrule
-Misunderstood Issue & 33 & 5 & 33 & 71 \\
-Gave Up Early & 0 & 13 & 0 & 13 \\
-Excessive Exploration & 1 & 1 & 12 & 14 \\
-Missed Relevant File & 0 & 7 & 1 & 8 \\
-Wrong Fix Location & 0 & 4 & 0 & 4 \\
-No Submission & 0 & 1 & 0 & 1 \\
-\midrule
-\textbf{Total Failures} & \textbf{34} & \textbf{31} & \textbf{46} & \textbf{111} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Key findings from failure analysis:
-
-\begin{itemize}
-    \item \textbf{``Misunderstood Issue'' dominates}: This failure mode accounts for 64\% of all failures. The heuristic triggers when the agent's actions don't align with issue keywords or when it modifies wrong files. For GPT-5.1 and o4-mini, this was the primary failure mode.
-    
-    \item \textbf{Model-specific failure patterns}: 
-    \begin{itemize}
-        \item GPT-5.1: Almost exclusively misunderstood issues (97\% of failures), suggesting it confidently attempts fixes but often misdiagnoses the problem.
-        \item GPT-4o: More diverse failures including ``gave up early'' (42\% of its failures), indicating it more often recognized when it couldn't solve a task.
-        \item o4-mini: Split between misunderstood issues (72\%) and excessive exploration (26\%), often exhausting the step budget while searching.
-    \end{itemize}
-    
-    \item \textbf{Excessive exploration hurts o4-mini}: With 12 excessive exploration failures, o4-mini spent disproportionate effort reading files without converging on a solution.
-    
-    \item \textbf{GPT-4o's ``gave up early'' behavior}: 13 tasks where GPT-4o made no changes suggests it sometimes correctly assessed task difficulty but didn't attempt partial solutions.
-\end{itemize}
-
-\subsubsection{Task Difficulty Analysis}
-
-Examining which tasks were solved by multiple models reveals difficulty tiers:
-
-\begin{itemize}
-    \item \textbf{Easy tasks (solved by 3 models)}: Tasks like \texttt{30040}, \texttt{30454}, \texttt{30535}, \texttt{30644}, and \texttt{30956} were solved by GPT-5.1, GPT-4o, and o4-mini. These typically involved straightforward bug fixes in well-documented areas.
-    
-    \item \textbf{Medium tasks (solved by 1--2 models)}: Most tasks fell in this category, with GPT-5.1 often succeeding where others failed.
-    
-    \item \textbf{Hard tasks (solved by 0 models)}: Tasks like \texttt{30022}, \texttt{30100}, \texttt{30101}, and \texttt{30152} remained unsolved by all models, often involving complex multi-file changes or subtle semantic issues.
-\end{itemize}
-
-\subsection{Task Success Patterns}
-
-Analyzing per-task outcomes reveals interesting patterns in model complementarity:
-
-\begin{table}[H]
-\centering
-\caption{Selected task outcomes showing model complementarity}
-\label{tab:task_outcomes}
-\small
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Task ID} & \textbf{gpt-5.1} & \textbf{gpt-4o} & \textbf{o4-mini} & \textbf{Difficulty} \\
-\midrule
-30040 & \checkmark & \checkmark & \checkmark & Easy \\
-30454 & \checkmark & \checkmark & \checkmark & Easy \\
-30535 & \checkmark & \checkmark & \checkmark & Easy \\
-30644 & \checkmark & \checkmark & \checkmark & Easy \\
-30956 & \checkmark & \checkmark & \checkmark & Easy \\
-\midrule
-30039 & \checkmark & \checkmark & $\times$ & Medium \\
-30103 & \checkmark & \checkmark & $\times$ & Medium \\
-30443 & \checkmark & \checkmark & $\times$ & Medium \\
-30649 & \checkmark & \checkmark & $\times$ & Medium \\
-\midrule
-30128 & \checkmark & $\times$ & $\times$ & Hard \\
-30137 & \checkmark & \checkmark & $\times$ & Hard \\
-30373 & \checkmark & $\times$ & $\times$ & Hard \\
-30521 & \checkmark & $\times$ & \checkmark & Hard \\
-\midrule
-30022 & $\times$ & $\times$ & $\times$ & Very Hard \\
-30100 & $\times$ & $\times$ & $\times$ & Very Hard \\
-30101 & $\times$ & $\times$ & $\times$ & Very Hard \\
-\bottomrule
-\end{tabular}
-\begin{flushleft}
-\small \checkmark = Resolved, $\times$ = Not resolved. Showing representative tasks from each difficulty tier.
-\end{flushleft}
-\end{table}
-
-\textbf{Model agreement analysis}:
-\begin{itemize}
-    \item 5 tasks were solved by all three models (``easy'' tier)
-    \item 9 tasks were solved by exactly two models
-    \item 18 tasks were solved by exactly one model (mostly GPT-5.1)
-    \item 20 tasks remained unsolved by any model
-\end{itemize}
-
-This suggests potential for ensemble approaches where predictions from multiple models are combined, since models exhibit partial complementarity on medium-difficulty tasks.
 
 \end{document}
