@@ -449,6 +449,667 @@ def train_and_evaluate(
     return results, clf, scaler, test_data
 
 
+def extract_model_name(result: dict) -> str:
+    """Extract model name from a benchmark result."""
+    # Try config.model first
+    model = result.get("config", {}).get("model", "")
+    if model:
+        return model
+    # Fall back to task filename pattern
+    return "unknown"
+
+
+def group_results_by_model(results: list[dict]) -> dict[str, list[dict]]:
+    """Group benchmark results by model name."""
+    grouped = {}
+    for result in results:
+        model = extract_model_name(result)
+        if model not in grouped:
+            grouped[model] = []
+        grouped[model].append(result)
+    return grouped
+
+
+def train_and_evaluate_cross_model(
+    results: list[dict],
+    train_model: str,
+    config: ClassifierConfig,
+) -> dict:
+    """
+    Train on one model's results and evaluate on all other models.
+    
+    Args:
+        results: All benchmark results
+        train_model: Model name to use for training
+        config: Classifier configuration
+    
+    Returns:
+        Dictionary with training results and per-model test metrics
+    """
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score, f1_score,
+        confusion_matrix, roc_auc_score
+    )
+    
+    # Group by model
+    grouped = group_results_by_model(results)
+    
+    if train_model not in grouped:
+        raise ValueError(f"Training model '{train_model}' not found. Available: {list(grouped.keys())}")
+    
+    # Extract features for all data
+    X_all, y_all, feature_names, feature_map = extract_features(results, config)
+    
+    # Create model index mapping
+    model_indices = {}
+    idx = 0
+    for result in results:
+        model = extract_model_name(result)
+        if model not in model_indices:
+            model_indices[model] = []
+        model_indices[model].append(idx)
+        idx += 1
+    
+    # Split into train (one model) and test (other models)
+    train_indices = model_indices[train_model]
+    test_indices = [i for i in range(len(results)) if i not in train_indices]
+    
+    X_train = X_all[train_indices]
+    y_train = y_all[train_indices]
+    X_test = X_all[test_indices]
+    y_test = y_all[test_indices]
+    
+    # Normalize
+    scaler = None
+    if config.normalize:
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+    
+    # Train classifier
+    clf = create_classifier(config)
+    print(f"Training on {train_model} ({len(train_indices)} samples)...")
+    clf.fit(X_train, y_train)
+    
+    # Feature importance
+    if hasattr(clf, "feature_importances_"):
+        importances = clf.feature_importances_
+    elif hasattr(clf, "coef_"):
+        importances = np.abs(clf.coef_[0])
+    else:
+        importances = np.zeros(len(feature_names))
+    
+    importance_pairs = sorted(zip(feature_names, importances), key=lambda x: -x[1])
+    
+    # Results structure
+    eval_results = {
+        "config": {
+            "classifier_type": config.classifier_type,
+            "train_model": train_model,
+            "train_samples": len(train_indices),
+            "train_positive_rate": float(y_train.mean()),
+            "test_samples": len(test_indices),
+            "n_features": len(feature_names),
+        },
+        "feature_importance": [
+            {"feature": name, "importance": float(imp)}
+            for name, imp in importance_pairs
+        ],
+        "per_model_results": {},
+    }
+    
+    # Evaluate on each test model separately
+    print(f"\nEvaluating on test models...")
+    for model_name, indices in model_indices.items():
+        if model_name == train_model:
+            continue
+        
+        # Get this model's test data
+        X_model = X_all[indices]
+        y_model = y_all[indices]
+        
+        if config.normalize and scaler is not None:
+            X_model = scaler.transform(X_model)
+        
+        y_pred = clf.predict(X_model)
+        y_prob = None
+        
+        model_metrics = {
+            "n_samples": len(indices),
+            "n_positive": int(y_model.sum()),
+            "positive_rate": float(y_model.mean()),
+            "accuracy": float(accuracy_score(y_model, y_pred)),
+            "precision": float(precision_score(y_model, y_pred, zero_division=0)),
+            "recall": float(recall_score(y_model, y_pred, zero_division=0)),
+            "f1": float(f1_score(y_model, y_pred, zero_division=0)),
+            "confusion_matrix": confusion_matrix(y_model, y_pred).tolist(),
+        }
+        
+        # Probability scores
+        if hasattr(clf, "predict_proba"):
+            y_prob = clf.predict_proba(X_model)[:, 1]
+            
+            # Probability stats for positive and negative samples
+            pos_mask = y_model == 1
+            neg_mask = y_model == 0
+            
+            model_metrics["prob_stats"] = {
+                "mean": float(y_prob.mean()),
+                "std": float(y_prob.std()),
+                "min": float(y_prob.min()),
+                "max": float(y_prob.max()),
+            }
+            
+            if pos_mask.sum() > 0:
+                model_metrics["prob_stats"]["positive_mean"] = float(y_prob[pos_mask].mean())
+                model_metrics["prob_stats"]["positive_std"] = float(y_prob[pos_mask].std())
+            if neg_mask.sum() > 0:
+                model_metrics["prob_stats"]["negative_mean"] = float(y_prob[neg_mask].mean())
+                model_metrics["prob_stats"]["negative_std"] = float(y_prob[neg_mask].std())
+            
+            # Store individual probabilities with labels
+            model_metrics["predictions"] = [
+                {"prob": float(p), "pred": int(pred), "actual": int(actual)}
+                for p, pred, actual in zip(y_prob, y_pred, y_model)
+            ]
+        
+        # ROC AUC if possible
+        if y_prob is not None and len(np.unique(y_model)) > 1:
+            try:
+                model_metrics["roc_auc"] = float(roc_auc_score(y_model, y_prob))
+            except:
+                pass
+        
+        eval_results["per_model_results"][model_name] = model_metrics
+        
+        print(f"  {model_name}: Acc={model_metrics['accuracy']:.1%}, "
+              f"Prec={model_metrics['precision']:.1%}, "
+              f"Rec={model_metrics['recall']:.1%}, "
+              f"F1={model_metrics['f1']:.1%} "
+              f"(n={len(indices)}, pos={int(y_model.sum())})")
+    
+    # Aggregate test metrics
+    all_test_pred = clf.predict(X_test)
+    y_prob_all = None
+    
+    eval_results["aggregate_test"] = {
+        "n_samples": len(test_indices),
+        "n_positive": int(y_test.sum()),
+        "accuracy": float(accuracy_score(y_test, all_test_pred)),
+        "precision": float(precision_score(y_test, all_test_pred, zero_division=0)),
+        "recall": float(recall_score(y_test, all_test_pred, zero_division=0)),
+        "f1": float(f1_score(y_test, all_test_pred, zero_division=0)),
+        "confusion_matrix": confusion_matrix(y_test, all_test_pred).tolist(),
+    }
+    
+    if hasattr(clf, "predict_proba") and len(np.unique(y_test)) > 1:
+        try:
+            y_prob_all = clf.predict_proba(X_test)[:, 1]
+            eval_results["aggregate_test"]["roc_auc"] = float(roc_auc_score(y_test, y_prob_all))
+        except:
+            pass
+    
+    # Test data for visualization
+    test_data = {
+        "X_test": X_test,
+        "y_test": y_test,
+        "y_pred": all_test_pred,
+        "y_prob": y_prob_all,
+    }
+    
+    return eval_results, clf, scaler, feature_names, feature_map, test_data
+
+
+def print_cross_model_results(results: dict) -> None:
+    """Print cross-model evaluation results."""
+    print()
+    print("=" * 70)
+    print("CROSS-MODEL EVALUATION RESULTS")
+    print("=" * 70)
+    print()
+    
+    cfg = results["config"]
+    print(f"Training Model: {cfg['train_model']}")
+    print(f"Training Samples: {cfg['train_samples']} ({cfg['train_positive_rate']:.1%} positive)")
+    print(f"Test Samples: {cfg['test_samples']}")
+    print(f"Features: {cfg['n_features']}")
+    print()
+    
+    # Per-model results
+    print("Per-Model Test Results:")
+    print("-" * 70)
+    print(f"{'Model':<25} {'N':>5} {'Pos':>4} {'Acc':>7} {'Prec':>7} {'Rec':>7} {'F1':>7}")
+    print("-" * 70)
+    
+    for model, metrics in results["per_model_results"].items():
+        print(f"{model:<25} {metrics['n_samples']:>5} {metrics['n_positive']:>4} "
+              f"{metrics['accuracy']:>6.1%} {metrics['precision']:>6.1%} "
+              f"{metrics['recall']:>6.1%} {metrics['f1']:>6.1%}")
+    
+    print("-" * 70)
+    agg = results["aggregate_test"]
+    print(f"{'AGGREGATE':<25} {agg['n_samples']:>5} {agg['n_positive']:>4} "
+          f"{agg['accuracy']:>6.1%} {agg['precision']:>6.1%} "
+          f"{agg['recall']:>6.1%} {agg['f1']:>6.1%}")
+    print()
+    
+    # Probability scores per model
+    print("Classifier Probability Scores:")
+    print("-" * 70)
+    for model, metrics in results["per_model_results"].items():
+        if "prob_stats" in metrics:
+            ps = metrics["prob_stats"]
+            print(f"\n{model}:")
+            print(f"  Overall:  mean={ps['mean']:.3f}, std={ps['std']:.3f}, range=[{ps['min']:.3f}, {ps['max']:.3f}]")
+            if "positive_mean" in ps:
+                print(f"  Positive: mean={ps['positive_mean']:.3f} ± {ps.get('positive_std', 0):.3f}")
+            if "negative_mean" in ps:
+                print(f"  Negative: mean={ps['negative_mean']:.3f} ± {ps.get('negative_std', 0):.3f}")
+    print()
+    
+    # Final Classifier Score Summary
+    print("=" * 70)
+    print("FINAL CLASSIFIER SCORE")
+    print("=" * 70)
+    print(f"  Accuracy:   {agg['accuracy']:.1%}")
+    print(f"  Precision:  {agg['precision']:.1%}")
+    print(f"  Recall:     {agg['recall']:.1%}")
+    print(f"  F1 Score:   {agg['f1']:.1%}")
+    if 'roc_auc' in agg:
+        print(f"  ROC AUC:    {agg['roc_auc']:.3f}")
+    print()
+    
+    # Feature importance
+    print("Top 10 Most Important Features:")
+    print("-" * 40)
+    for i, fi in enumerate(results["feature_importance"][:10], 1):
+        bar = "█" * int(fi["importance"] * 50)
+        print(f"  {i:2}. {fi['feature']:<30} {fi['importance']:.3f} {bar}")
+    print()
+
+
+def generate_probability_heatmap(
+    eval_results: dict,
+    output_dir: Path,
+) -> Path:
+    """Generate a heatmap comparing classifier probabilities vs actual labels per sample."""
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    import numpy as np
+    
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Collect all predictions across models
+    all_data = []
+    model_boundaries = []
+    current_idx = 0
+    
+    for model_name, metrics in eval_results["per_model_results"].items():
+        if "predictions" not in metrics:
+            continue
+        
+        for pred in metrics["predictions"]:
+            all_data.append({
+                "model": model_name,
+                "prob": pred["prob"],
+                "actual": pred["actual"],
+                "pred": pred["pred"],
+            })
+        
+        model_boundaries.append((current_idx, current_idx + len(metrics["predictions"]), model_name))
+        current_idx += len(metrics["predictions"])
+    
+    if not all_data:
+        print("No prediction data available for heatmap")
+        return None
+    
+    # Sort by model then by probability within each model
+    all_data_sorted = []
+    for start, end, model in model_boundaries:
+        model_data = [d for d in all_data if d["model"] == model]
+        model_data.sort(key=lambda x: x["prob"])
+        all_data_sorted.extend(model_data)
+    
+    n_samples = len(all_data_sorted)
+    
+    # Create figure
+    fig, axes = plt.subplots(1, 3, figsize=(14, max(8, n_samples * 0.15)), 
+                              gridspec_kw={'width_ratios': [3, 1, 1]})
+    
+    # Prepare data arrays
+    probs = np.array([d["prob"] for d in all_data_sorted])
+    actuals = np.array([d["actual"] for d in all_data_sorted])
+    preds = np.array([d["pred"] for d in all_data_sorted])
+    models = [d["model"] for d in all_data_sorted]
+    
+    # Create sample labels
+    sample_labels = []
+    model_counts = {}
+    for d in all_data_sorted:
+        m = d["model"]
+        if m not in model_counts:
+            model_counts[m] = 0
+        model_counts[m] += 1
+        sample_labels.append(f"{m[:8]}_{model_counts[m]}")
+    
+    y_positions = np.arange(n_samples)
+    
+    # Plot 1: Probability scores as horizontal bars with color based on actual label
+    ax1 = axes[0]
+    colors = ['#e74c3c' if a == 0 else '#27ae60' for a in actuals]
+    bars = ax1.barh(y_positions, probs, color=colors, alpha=0.8, edgecolor='white', linewidth=0.5)
+    
+    # Add threshold line
+    ax1.axvline(x=0.5, color='black', linestyle='--', linewidth=1.5, label='Threshold (0.5)')
+    
+    ax1.set_xlim(0, 1)
+    ax1.set_ylim(-0.5, n_samples - 0.5)
+    ax1.set_xlabel('Classifier Probability', fontsize=12)
+    ax1.set_ylabel('Sample', fontsize=12)
+    ax1.set_title('Classifier Probability Score per Sample', fontsize=14, fontweight='bold')
+    ax1.set_yticks(y_positions[::max(1, n_samples//20)])
+    ax1.set_yticklabels([sample_labels[i] for i in range(0, n_samples, max(1, n_samples//20))], fontsize=8)
+    ax1.invert_yaxis()
+    
+    # Legend
+    red_patch = mpatches.Patch(color='#e74c3c', label='Actual: Failed (0)')
+    green_patch = mpatches.Patch(color='#27ae60', label='Actual: Resolved (1)')
+    ax1.legend(handles=[red_patch, green_patch], loc='lower right', fontsize=10)
+    
+    # Plot 2: Actual labels heatmap
+    ax2 = axes[1]
+    actual_img = ax2.imshow(actuals.reshape(-1, 1), cmap='RdYlGn', aspect='auto', vmin=0, vmax=1)
+    ax2.set_xticks([0])
+    ax2.set_xticklabels(['Actual'], fontsize=10)
+    ax2.set_yticks([])
+    ax2.set_title('Actual\nLabel', fontsize=11, fontweight='bold')
+    
+    # Plot 3: Predicted labels heatmap  
+    ax3 = axes[2]
+    pred_img = ax3.imshow(preds.reshape(-1, 1), cmap='RdYlGn', aspect='auto', vmin=0, vmax=1)
+    ax3.set_xticks([0])
+    ax3.set_xticklabels(['Predicted'], fontsize=10)
+    ax3.set_yticks([])
+    ax3.set_title('Predicted\nLabel', fontsize=11, fontweight='bold')
+    
+    # Add model separators
+    current_pos = 0
+    for i, (start, end, model) in enumerate(model_boundaries):
+        count = sum(1 for d in all_data_sorted[:end] if d["model"] == model) 
+        # Find actual positions in sorted data
+        model_positions = [j for j, d in enumerate(all_data_sorted) if d["model"] == model]
+        if model_positions:
+            sep_pos = model_positions[-1] + 0.5
+            if sep_pos < n_samples - 0.5:
+                for ax in axes:
+                    ax.axhline(y=sep_pos, color='black', linewidth=2)
+    
+    plt.tight_layout()
+    
+    # Save
+    output_file = output_dir / "probability_heatmap.png"
+    plt.savefig(output_file, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"Probability heatmap saved to: {output_file}")
+    
+    # Also create a summary table
+    print("\n" + "=" * 70)
+    print("PROBABILITY SCORES PER SAMPLE")
+    print("=" * 70)
+    print(f"{'Model':<25} {'Sample':>6} {'Prob':>8} {'Pred':>6} {'Actual':>7} {'Match':>6}")
+    print("-" * 70)
+    
+    for i, d in enumerate(all_data_sorted):
+        match = "✓" if d["pred"] == d["actual"] else "✗"
+        match_str = match if d["pred"] == d["actual"] else f"{match} FN" if d["actual"] == 1 else f"{match} FP"
+        print(f"{d['model']:<25} {i+1:>6} {d['prob']:>8.3f} {d['pred']:>6} {d['actual']:>7} {match_str:>6}")
+    
+    return output_file
+
+
+def generate_cross_model_html_report(
+    results: dict,
+    plot_files: dict,
+    output_file: Path,
+) -> None:
+    """Generate HTML report for cross-model evaluation."""
+    
+    cfg = results["config"]
+    fi = results["feature_importance"]
+    agg = results["aggregate_test"]
+    per_model = results["per_model_results"]
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Model Classifier Evaluation</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px;
+            background: #f5f5f5;
+        }}
+        h1 {{ color: #2c3e50; border-bottom: 3px solid #e74c3c; padding-bottom: 10px; margin-bottom: 30px; }}
+        h2 {{ color: #34495e; margin: 30px 0 15px 0; padding-bottom: 5px; border-bottom: 1px solid #ddd; }}
+        .card {{ background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+        .metric-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }}
+        .metric-box.green {{ background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }}
+        .metric-box.blue {{ background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }}
+        .metric-box.orange {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }}
+        .metric-box.red {{ background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }}
+        .metric-value {{ font-size: 2em; font-weight: bold; }}
+        .metric-label {{ font-size: 0.9em; opacity: 0.9; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 15px 0; background: white; }}
+        th, td {{ padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }}
+        th {{ background: #f8f9fa; font-weight: 600; color: #2c3e50; }}
+        tr:hover {{ background: #f8f9fa; }}
+        .importance-bar {{ background: #3498db; height: 20px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-left: 10px; }}
+        .highlight {{ background: #fff3cd; }}
+        .good {{ color: #28a745; font-weight: bold; }}
+        .bad {{ color: #dc3545; }}
+        .plot-container {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .plot-card {{ background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .plot-card img {{ width: 100%; height: auto; border-radius: 4px; }}
+        .footer {{ text-align: center; color: #666; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; }}
+    </style>
+</head>
+<body>
+    <h1>🔄 Cross-Model Classifier Evaluation</h1>
+    
+    <div class="card">
+        <h2>📊 Training Configuration</h2>
+        <div class="metrics-grid">
+            <div class="metric-box red">
+                <div class="metric-value">{cfg['train_model']}</div>
+                <div class="metric-label">Training Model</div>
+            </div>
+            <div class="metric-box blue">
+                <div class="metric-value">{cfg['train_samples']}</div>
+                <div class="metric-label">Training Samples</div>
+            </div>
+            <div class="metric-box green">
+                <div class="metric-value">{cfg['test_samples']}</div>
+                <div class="metric-label">Test Samples</div>
+            </div>
+            <div class="metric-box orange">
+                <div class="metric-value">{cfg['train_positive_rate']:.1%}</div>
+                <div class="metric-label">Train Positive Rate</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>📈 Aggregate Test Performance</h2>
+        <div class="metrics-grid">
+            <div class="metric-box green">
+                <div class="metric-value">{agg['accuracy']:.1%}</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-box blue">
+                <div class="metric-value">{agg['precision']:.1%}</div>
+                <div class="metric-label">Precision</div>
+            </div>
+            <div class="metric-box purple">
+                <div class="metric-value">{agg['recall']:.1%}</div>
+                <div class="metric-label">Recall</div>
+            </div>
+            <div class="metric-box orange">
+                <div class="metric-value">{agg['f1']:.1%}</div>
+                <div class="metric-label">F1 Score</div>
+            </div>
+        </div>
+        {"<p><strong>ROC AUC:</strong> " + f"{agg['roc_auc']:.3f}</p>" if 'roc_auc' in agg else ""}
+    </div>
+    
+    <div class="card" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white;">
+        <h2 style="color: white; border-bottom-color: #4facfe;">🏆 FINAL CLASSIFIER SCORE</h2>
+        <div class="metrics-grid">
+            <div class="metric-box" style="background: rgba(255,255,255,0.1);">
+                <div class="metric-value">{agg['accuracy']:.1%}</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-box" style="background: rgba(255,255,255,0.1);">
+                <div class="metric-value">{agg['precision']:.1%}</div>
+                <div class="metric-label">Precision</div>
+            </div>
+            <div class="metric-box" style="background: rgba(255,255,255,0.1);">
+                <div class="metric-value">{agg['recall']:.1%}</div>
+                <div class="metric-label">Recall</div>
+            </div>
+            <div class="metric-box" style="background: rgba(255,255,255,0.1);">
+                <div class="metric-value">{agg['f1']:.1%}</div>
+                <div class="metric-label">F1 Score</div>
+            </div>
+        </div>
+        <p style="text-align: center; margin-top: 15px; font-size: 1.1em;">
+            Trained on <strong>{cfg['train_model']}</strong> ({cfg['train_samples']} samples) | 
+            Tested on {cfg['test_samples']} samples from other models
+        </p>
+    </div>
+    
+    <div class="card">
+        <h2>🎯 Per-Model Test Results</h2>
+        <p style="margin-bottom: 15px; color: #666;">
+            Classifier trained on <strong>{cfg['train_model']}</strong>, evaluated on each other model separately.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Samples</th>
+                    <th>Positives</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1 Score</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+    
+    for model, metrics in per_model.items():
+        acc_class = "good" if metrics['accuracy'] >= 0.8 else ""
+        f1_class = "good" if metrics['f1'] >= 0.7 else ""
+        html += f"""                <tr>
+                    <td><strong>{model}</strong></td>
+                    <td>{metrics['n_samples']}</td>
+                    <td>{metrics['n_positive']}</td>
+                    <td class="{acc_class}">{metrics['accuracy']:.1%}</td>
+                    <td>{metrics['precision']:.1%}</td>
+                    <td>{metrics['recall']:.1%}</td>
+                    <td class="{f1_class}">{metrics['f1']:.1%}</td>
+                </tr>
+"""
+    
+    html += f"""                <tr class="highlight">
+                    <td><strong>AGGREGATE</strong></td>
+                    <td>{agg['n_samples']}</td>
+                    <td>{agg['n_positive']}</td>
+                    <td><strong>{agg['accuracy']:.1%}</strong></td>
+                    <td><strong>{agg['precision']:.1%}</strong></td>
+                    <td><strong>{agg['recall']:.1%}</strong></td>
+                    <td><strong>{agg['f1']:.1%}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="card">
+        <h2>⭐ Feature Importance (Top 15)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Feature</th>
+                    <th>Importance</th>
+                    <th>Visualization</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+    
+    max_imp = fi[0]["importance"] if fi else 1
+    for i, f in enumerate(fi[:15], 1):
+        bar_width = int((f["importance"] / max_imp) * 200)
+        html += f"""                <tr>
+                    <td>{i}</td>
+                    <td><code>{f['feature']}</code></td>
+                    <td><strong>{f['importance']:.4f}</strong></td>
+                    <td><div class="importance-bar" style="width: {bar_width}px;"></div></td>
+                </tr>
+"""
+    
+    html += """            </tbody>
+        </table>
+    </div>
+"""
+    
+    # Add plots if available
+    if plot_files:
+        html += """
+    <div class="card">
+        <h2>📉 Visualizations</h2>
+        <div class="plot-container">
+"""
+        import base64
+        for name, path in plot_files.items():
+            try:
+                with open(path, "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode()
+                html += f"""            <div class="plot-card">
+                <img src="data:image/png;base64,{img_data}" alt="{name}">
+            </div>
+"""
+            except:
+                pass
+        html += """        </div>
+    </div>
+"""
+    
+    from datetime import datetime
+    html += f"""
+    <div class="footer">
+        <p>Generated by Coding Agent Eval Framework</p>
+        <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+</body>
+</html>
+"""
+    
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w") as f:
+        f.write(html)
+    
+    print(f"HTML report saved to: {output_file}")
+
+
 def print_results(results: dict) -> None:
     """Pretty print evaluation results."""
     print()
@@ -1132,6 +1793,15 @@ def main():
         action="store_true",
         help="Generate HTML report with visualizations",
     )
+    parser.add_argument(
+        "--train-model",
+        help="Train on this model only, test on all others (cross-model evaluation)",
+    )
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List available models in the data and exit",
+    )
     
     # Prediction mode
     parser.add_argument(
@@ -1167,6 +1837,15 @@ def main():
     results = load_benchmark_results(args.data)
     print(f"Loaded {len(results)} examples")
     
+    # List models if requested
+    grouped = group_results_by_model(results)
+    if args.list_models:
+        print("\nAvailable models:")
+        for model, model_results in sorted(grouped.items()):
+            n_pos = sum(1 for r in model_results if r.get("evaluation", {}).get("resolved", False))
+            print(f"  {model}: {len(model_results)} samples ({n_pos} resolved)")
+        return
+    
     if len(results) < 10:
         print("ERROR: Need at least 10 examples for training")
         return
@@ -1177,6 +1856,66 @@ def main():
         normalize=not args.no_normalize,
     )
     
+    output_path = Path(args.output)
+    
+    # Cross-model evaluation mode
+    if args.train_model:
+        print(f"\nCross-model evaluation: train on '{args.train_model}'")
+        print(f"Available models: {list(grouped.keys())}")
+        
+        eval_results, clf, scaler, feature_names, feature_map, test_data = train_and_evaluate_cross_model(
+            results, args.train_model, config
+        )
+        
+        # Print results
+        print_cross_model_results(eval_results)
+        
+        # Save model
+        if not args.evaluate_only:
+            save_model(clf, scaler, feature_names, feature_map, eval_results, args.output)
+        
+        # Generate report
+        if args.report:
+            print()
+            print("Generating visualizations...")
+            plot_files = generate_visualizations(
+                {
+                    "config": eval_results["config"],
+                    "feature_importance": eval_results["feature_importance"],
+                    "cross_validation": {  # Fake CV for visualization
+                        "accuracy": {"mean": eval_results["aggregate_test"]["accuracy"], "std": 0},
+                        "precision": {"mean": eval_results["aggregate_test"]["precision"], "std": 0},
+                        "recall": {"mean": eval_results["aggregate_test"]["recall"], "std": 0},
+                        "f1": {"mean": eval_results["aggregate_test"]["f1"], "std": 0},
+                    },
+                    "confusion_matrix": eval_results["aggregate_test"]["confusion_matrix"],
+                    "test_metrics": eval_results["aggregate_test"],
+                },
+                test_data["X_test"],
+                test_data["y_test"],
+                test_data["y_pred"],
+                test_data["y_prob"],
+                output_path / "plots",
+            )
+            
+            # Generate probability heatmap
+            print("Generating probability heatmap...")
+            heatmap_file = generate_probability_heatmap(
+                eval_results,
+                output_path / "plots",
+            )
+            if heatmap_file:
+                plot_files["probability_heatmap"] = heatmap_file
+            
+            print("Generating HTML report...")
+            generate_cross_model_html_report(
+                eval_results,
+                plot_files,
+                output_path / "cross_model_report.html",
+            )
+        return
+    
+    # Standard evaluation mode
     # Extract features
     print("Extracting features...")
     X, y, feature_names, feature_map = extract_features(results, config)

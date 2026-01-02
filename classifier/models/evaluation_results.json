@@ -1,225 +1,195 @@
 {
   "config": {
     "classifier_type": "random_forest",
-    "n_samples": 208,
-    "n_features": 49,
-    "positive_rate": 0.18269230769230768
+    "train_model": "gpt-5.1",
+    "train_samples": 52,
+    "train_positive_rate": 0.34615384615384615,
+    "test_samples": 156,
+    "n_features": 49
   },
-  "cross_validation": {
-    "accuracy": {
-      "mean": 0.9616724738675959,
-      "std": 0.04421259711501812
-    },
-    "f1": {
-      "mean": 0.8866666666666665,
-      "std": 0.12578641509408808
-    },
-    "precision": {
-      "mean": 0.9428571428571428,
-      "std": 0.11428571428571428
-    },
-    "recall": {
-      "mean": 0.8428571428571429,
-      "std": 0.15127013274676693
-    }
-  },
-  "confusion_matrix": [
-    [
-      168,
-      2
-    ],
-    [
-      6,
-      32
-    ]
-  ],
   "feature_importance": [
     {
       "feature": "fail_tool_errors_occurred",
-      "importance": 0.3098840556679051
-    },
-    {
-      "feature": "conv_progress_volatility",
-      "importance": 0.08668957416551591
-    },
-    {
-      "feature": "patch_lines_added",
-      "importance": 0.07540452924124494
-    },
-    {
-      "feature": "fail_no_changes_made",
-      "importance": 0.056741670931512826
+      "importance": 0.357591271000993
     },
     {
       "feature": "fail_wrong_files_modified",
-      "importance": 0.03555233170440902
-    },
-    {
-      "feature": "phase_implementation_steps",
-      "importance": 0.033930084694071785
-    },
-    {
-      "feature": "patch_lines_removed",
-      "importance": 0.032683183137798354
+      "importance": 0.05813112605174396
     },
     {
       "feature": "trajectory_efficiency",
-      "importance": 0.031930179186484775
+      "importance": 0.04299021050878919
     },
     {
       "feature": "error_recovered_errors",
-      "importance": 0.027990749360623846
+      "importance": 0.04073814225905432
     },
     {
-      "feature": "tool_used_str_replace",
-      "importance": 0.027387544378309675
-    },
-    {
-      "feature": "fail_agent_submitted",
-      "importance": 0.02592649844266361
-    },
-    {
-      "feature": "error_total_errors",
-      "importance": 0.02399665072361373
-    },
-    {
-      "feature": "error_recovery_rate",
-      "importance": 0.02374076096202349
-    },
-    {
-      "feature": "phase_exploration_steps",
-      "importance": 0.02265516117282055
-    },
-    {
-      "feature": "agent_success",
-      "importance": 0.018226496824270567
-    },
-    {
-      "feature": "phase_exploration_pct",
-      "importance": 0.017211095521050622
-    },
-    {
-      "feature": "tool_submitted",
-      "importance": 0.015729283059629926
-    },
-    {
-      "feature": "exploration_efficiency",
-      "importance": 0.015697876530152477
-    },
-    {
-      "feature": "phase_phase_transitions",
-      "importance": 0.014534394470656646
+      "feature": "patch_lines_removed",
+      "importance": 0.040073142275716934
     },
     {
       "feature": "tool_total_calls",
-      "importance": 0.01406520584402942
+      "importance": 0.037862687125610944
+    },
+    {
+      "feature": "conv_progress_volatility",
+      "importance": 0.03705706409685392
     },
     {
       "feature": "traj_length",
-      "importance": 0.013920469621599851
+      "importance": 0.03666786282010816
+    },
+    {
+      "feature": "patch_lines_added",
+      "importance": 0.03615321012794157
     },
     {
       "feature": "agent_steps",
-      "importance": 0.009902173448597618
+      "importance": 0.03131796039172111
     },
     {
-      "feature": "traj_unnecessary_steps",
-      "importance": 0.009889836335417504
+      "feature": "phase_phase_transitions",
+      "importance": 0.027858569455253765
     },
     {
-      "feature": "explore_files_explored",
-      "importance": 0.008989311856628966
+      "feature": "phase_exploration_steps",
+      "importance": 0.02657062841036214
     },
     {
-      "feature": "explore_relevant_file_discovery_step",
-      "importance": 0.005527832515724099
+      "feature": "error_total_errors",
+      "importance": 0.024186092838231147
+    },
+    {
+      "feature": "phase_exploration_pct",
+      "importance": 0.023343621432884615
     },
     {
       "feature": "explore_directories_explored",
-      "importance": 0.004834017666464729
+      "importance": 0.01873220759690761
     },
     {
       "feature": "traj_optimal_length",
-      "importance": 0.004507440582161152
+      "importance": 0.018463168660611127
     },
     {
-      "feature": "error_max_repetition",
-      "importance": 0.004411522593262298
+      "feature": "phase_implementation_steps",
+      "importance": 0.017592123330200014
+    },
+    {
+      "feature": "traj_unnecessary_steps",
+      "importance": 0.016424467323122947
+    },
+    {
+      "feature": "error_recovery_rate",
+      "importance": 0.01596354321246011
+    },
+    {
+      "feature": "explore_files_explored",
+      "importance": 0.015451772059008656
+    },
+    {
+      "feature": "explore_relevant_file_discovery_step",
+      "importance": 0.01498148418442468
+    },
+    {
+      "feature": "exploration_efficiency",
+      "importance": 0.011754989218921767
     },
     {
       "feature": "explore_wasted_explorations",
-      "importance": 0.0036193609188418883
+      "importance": 0.009763154606646701
+    },
+    {
+      "feature": "error_max_repetition",
+      "importance": 0.008369688144529862
+    },
+    {
+      "feature": "fail_no_changes_made",
+      "importance": 0.008231316980262601
     },
     {
       "feature": "phase_verification_steps",
-      "importance": 0.0033821860209839005
-    },
-    {
-      "feature": "reasoning_score",
-      "importance": 0.003101337388487168
+      "importance": 0.006605568007340456
     },
     {
       "feature": "conv_monotonic_progress",
-      "importance": 0.0030875683985861716
-    },
-    {
-      "feature": "reasoning_mentions_issue_keywords",
-      "importance": 0.0022966076259098548
-    },
-    {
-      "feature": "reasoning_verifies_after_change",
-      "importance": 0.00224020374567569
-    },
-    {
-      "feature": "reasoning_mentions_relevant_files",
-      "importance": 0.0018375379034246766
-    },
-    {
-      "feature": "phase_followed_test_after_change",
-      "importance": 0.001818014842591066
-    },
-    {
-      "feature": "reasoning_explains_changes",
-      "importance": 0.0014390786098957469
-    },
-    {
-      "feature": "reasoning_has_explicit_reasoning",
-      "importance": 0.0013070223660967735
+      "importance": 0.0061902435553760175
     },
     {
       "feature": "tool_ran_tests",
-      "importance": 0.0011227753537117234
+      "importance": 0.004366061317187365
     },
     {
-      "feature": "fail_model_got_stuck",
-      "importance": 0.0008495354624051497
+      "feature": "phase_followed_test_after_change",
+      "importance": 0.0027289086418291852
     },
     {
-      "feature": "tool_read_relevant_files",
-      "importance": 0.0007061591327591314
-    },
-    {
-      "feature": "patch_patch_too_large",
-      "importance": 0.0005141999072639428
-    },
-    {
-      "feature": "reasoning_hypothesizes_before_acting",
-      "importance": 0.0003909097952638616
-    },
-    {
-      "feature": "fail_hit_max_steps",
-      "importance": 0.00032757188945967136
+      "feature": "tool_used_str_replace",
+      "importance": 0.0011515083573051886
     },
     {
       "feature": "error_stuck_episodes",
-      "importance": 1.5181754273863843e-16
+      "importance": 0.0008511198945981798
+    },
+    {
+      "feature": "fail_model_got_stuck",
+      "importance": 0.000669528720998868
     },
     {
       "feature": "conv_had_regression",
-      "importance": 5.490669130127534e-17
+      "importance": 0.00040553816223459874
+    },
+    {
+      "feature": "fail_hit_max_steps",
+      "importance": 0.0003846153846153898
+    },
+    {
+      "feature": "agent_success",
+      "importance": 0.0003774038461538495
+    },
+    {
+      "feature": "reasoning_score",
+      "importance": 0.0
+    },
+    {
+      "feature": "tool_read_relevant_files",
+      "importance": 0.0
     },
     {
       "feature": "tool_used_write_file",
+      "importance": 0.0
+    },
+    {
+      "feature": "tool_submitted",
+      "importance": 0.0
+    },
+    {
+      "feature": "patch_patch_too_large",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_has_explicit_reasoning",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_mentions_issue_keywords",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_mentions_relevant_files",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_hypothesizes_before_acting",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_explains_changes",
+      "importance": 0.0
+    },
+    {
+      "feature": "reasoning_verifies_after_change",
       "importance": 0.0
     },
     {
@@ -229,13 +199,899 @@
     {
       "feature": "error_max_stuck_duration",
       "importance": 0.0
+    },
+    {
+      "feature": "fail_agent_submitted",
+      "importance": 0.0
     }
   ],
-  "test_metrics": {
-    "accuracy": 0.9761904761904762,
+  "per_model_results": {
+    "claude-opus-4-20250514": {
+      "n_samples": 52,
+      "n_positive": 0,
+      "positive_rate": 0.0,
+      "accuracy": 1.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "confusion_matrix": [
+        [
+          52
+        ]
+      ],
+      "prob_stats": {
+        "mean": 0.40173076923076917,
+        "std": 0.034846981650890715,
+        "min": 0.19,
+        "max": 0.42,
+        "negative_mean": 0.40173076923076917,
+        "negative_std": 0.034846981650890715
+      },
+      "predictions": [
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.28,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.42,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.42,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.42,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.41,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.4,
+          "pred": 0,
+          "actual": 0
+        }
+      ]
+    },
+    "gpt-4o": {
+      "n_samples": 52,
+      "n_positive": 14,
+      "positive_rate": 0.2692307692307692,
+      "accuracy": 0.9423076923076923,
+      "precision": 1.0,
+      "recall": 0.7857142857142857,
+      "f1": 0.88,
+      "confusion_matrix": [
+        [
+          38,
+          0
+        ],
+        [
+          3,
+          11
+        ]
+      ],
+      "prob_stats": {
+        "mean": 0.2841926991926992,
+        "std": 0.206252488581635,
+        "min": 0.04,
+        "max": 0.79,
+        "positive_mean": 0.5791443112871685,
+        "positive_std": 0.11246467970006412,
+        "negative_mean": 0.17552631578947367,
+        "negative_std": 0.09845376602406497
+      },
+      "predictions": [
+        {
+          "prob": 0.25,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.57,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.55,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.29,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.09,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.51,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.26,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.07,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.51,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.24,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.08,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.08,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.1,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.27,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.25,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.3,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.06,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.79,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.06,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.06,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.7288311688311688,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.52,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.26,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.26,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.34,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.49,
+          "pred": 0,
+          "actual": 1
+        },
+        {
+          "prob": 0.09,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.06,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.59,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.79,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.16,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.04,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.07,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.45,
+          "pred": 0,
+          "actual": 1
+        },
+        {
+          "prob": 0.3,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.23,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.47,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.13,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.29,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.57,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.42,
+          "pred": 0,
+          "actual": 1
+        },
+        {
+          "prob": 0.6191891891891892,
+          "pred": 1,
+          "actual": 1
+        }
+      ],
+      "roc_auc": 0.9962406015037594
+    },
+    "o4-mini": {
+      "n_samples": 52,
+      "n_positive": 6,
+      "positive_rate": 0.11538461538461539,
+      "accuracy": 0.9807692307692307,
+      "precision": 1.0,
+      "recall": 0.8333333333333334,
+      "f1": 0.9090909090909091,
+      "confusion_matrix": [
+        [
+          46,
+          0
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "prob_stats": {
+        "mean": 0.21365384615384614,
+        "std": 0.15290807754175315,
+        "min": 0.06,
+        "max": 0.71,
+        "positive_mean": 0.6083333333333334,
+        "positive_std": 0.09334821309960296,
+        "negative_mean": 0.16217391304347828,
+        "negative_std": 0.04822560403652909
+      },
+      "predictions": [
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.46,
+          "pred": 0,
+          "actual": 1
+        },
+        {
+          "prob": 0.21,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.25,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.15,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.24,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.09,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.15,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.25,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.15,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.17,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.15,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.13,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.71,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.06,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.08,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.68,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.68,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.18,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.2,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.61,
+          "pred": 1,
+          "actual": 1
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.1,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.26,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.19,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.15,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.24,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.12,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.13,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.11,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.13,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.28,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.11,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.14,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.11,
+          "pred": 0,
+          "actual": 0
+        },
+        {
+          "prob": 0.51,
+          "pred": 1,
+          "actual": 1
+        }
+      ],
+      "roc_auc": 1.0
+    }
+  },
+  "aggregate_test": {
+    "n_samples": 156,
+    "n_positive": 20,
+    "accuracy": 0.9743589743589743,
     "precision": 1.0,
-    "recall": 0.875,
-    "f1": 0.9333333333333333,
-    "roc_auc": 1.0
+    "recall": 0.8,
+    "f1": 0.8888888888888888,
+    "confusion_matrix": [
+      [
+        136,
+        0
+      ],
+      [
+        4,
+        16
+      ]
+    ],
+    "roc_auc": 0.9983455882352941
   }
 }
