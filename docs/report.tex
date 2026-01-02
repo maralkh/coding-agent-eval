@@ -236,7 +236,7 @@ The framework provides a complete environment for running evaluations. Setup req
 
 \begin{lstlisting}[language=bash, caption={Environment setup}]
 # Clone and setup
-git clone https://github.com/[REPOSITORY]/coding-agent-eval.git
+git clone https://github.com/maralkh/coding-agent-eval.git
 cd coding-agent-eval
 ./setup.sh --venv --all  # Creates venv with all dependencies
 
@@ -1198,6 +1198,222 @@ The behavioral metrics collected by this framework provide a rich signal for pro
     \item Integrate with continuous integration systems for automated regression detection
     \item Explore multi-agent collaboration where specialized agents handle exploration, implementation, and verification
 \end{itemize}
+
+\subsection{Application: Best-of-N Selection}
+
+A practical application of the success classifier is \textbf{Best-of-N selection}: given $N$ independent agent attempts on the same task, select the attempt most likely to succeed. We evaluated this strategy via simulation using the classifier's probability estimates.
+
+\textbf{Methodology.} For each $N \in \{1, \ldots, 10\}$, we simulated 10,000 trials by sampling $N$ items from our dataset (with replacement) and applying selection strategies: \emph{Random} (uniform selection), \emph{Probability} (select highest $P(\text{success})$), and \emph{Oracle} (select any successful attempt if one exists, representing the upper bound).
+
+\begin{table}[h]
+\centering
+\caption{Best-of-N selection: success rate by strategy}
+\label{tab:best_of_n}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{N} & \textbf{Random} & \textbf{Probability} & \textbf{Oracle} & \textbf{$\Delta$ vs Random} \\
+\midrule
+1 & 18.4\% & 18.4\% & 18.4\% & +0.0\% \\
+3 & 18.8\% & 43.3\% & 45.4\% & +24.6\% \\
+5 & 18.7\% & 59.2\% & 64.1\% & +40.5\% \\
+10 & 18.1\% & 77.9\% & 86.6\% & +59.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item With $N=3$, probability selection more than doubles success rate (43.3\% vs 18.8\%)
+    \item With $N=5$, success rate triples to 59.2\%, compared to $\sim$19\% for random selection
+    \item The classifier achieves 92\% of oracle performance, indicating good but imperfect calibration
+\end{itemize}
+
+\textbf{Robustness to classifier noise.} We tested degraded classifiers by adding Gaussian noise to probability estimates ($P_{\text{noisy}} = P + \mathcal{N}(0, \sigma)$, clipped to $[0,1]$). Even with $\sigma = 0.4$, probability selection achieves 38.2\% success (vs 18.6\% random), demonstrating the approach remains effective with imperfect classifiers.
+
+\textbf{Compute efficiency.} To reach 80\% success rate, probability selection requires approximately $N=10$ attempts, while random selection cannot reach this threshold. The oracle achieves 80\% at $N=8$.
+
+\subsection{Application: Behavioral Fingerprinting}
+
+Beyond aggregate metrics, we can characterize each model's ``behavioral personality'' by examining patterns across multiple dimensions. We compute mean feature vectors per model and aggregate into six behavioral dimensions: \emph{reasoning}, \emph{exploration}, \emph{implementation}, \emph{verification}, \emph{efficiency}, and \emph{robustness}.
+
+\begin{table}[h]
+\centering
+\caption{Behavioral dimension scores by model (0--1 scale, higher = better)}
+\label{tab:fingerprint}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Model} & \textbf{Reas.} & \textbf{Expl.} & \textbf{Impl.} & \textbf{Verif.} & \textbf{Effic.} & \textbf{Robust.} \\
+\midrule
+Claude Opus 4 & 0.11 & 0.00 & 0.25 & 0.12 & \textbf{0.75} & \textbf{0.75} \\
+GPT-4o & \textbf{1.00} & 0.74 & \textbf{0.85} & \textbf{0.71} & 0.81 & 0.60 \\
+GPT-5.1 & 0.00 & 0.74 & 0.69 & 0.60 & 0.49 & 0.40 \\
+o4-mini & 0.00 & \textbf{0.86} & 0.33 & 0.48 & 0.37 & 0.62 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item \textbf{Distinct behavioral profiles}: GPT-4o dominates in reasoning (1.00) and implementation (0.85), explaining its 26.9\% success rate. Claude Opus 4, despite 0\% success, shows high efficiency (0.75)---it fails fast rather than exploring thoroughly. \emph{Note: Claude Opus 4 data appears incomplete; 0\% success with 100\% ``no changes'' suggests configuration issues or interrupted runs.}
+    \item \textbf{Exploration patterns}: o4-mini leads exploration (0.86) but has low implementation (0.33), suggesting it explores well but struggles to convert findings into solutions.
+    \item \textbf{Model similarity}: GPT-4o and GPT-5.1 are most similar (cosine: 0.01), while Claude Opus 4 and GPT-5.1 are most different (-0.63).
+\end{itemize}
+
+This fingerprinting enables targeted model selection: choose GPT-4o for tasks requiring strong reasoning and implementation, o4-mini for exploration-heavy tasks, or use ensemble approaches combining complementary strengths.
+
+\subsection{Application: Reward Modeling}
+
+The success classifier naturally provides a \textbf{reward signal} for reinforcement learning. Instead of sparse binary feedback (pass/fail at episode end), the classifier outputs $P(\text{success}) \in [0,1]$ as a dense, continuous reward.
+
+\textbf{Reward signal quality.} We evaluate the classifier's utility as a reward model by measuring separation between success and failure distributions:
+
+\begin{table}[h]
+\centering
+\caption{Reward signal quality metrics}
+\label{tab:reward_quality}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Successes} & \textbf{Failures} \\
+\midrule
+Mean reward & 0.539 & 0.103 \\
+Std deviation & 0.150 & 0.135 \\
+\midrule
+\textbf{Separation} & \multicolumn{2}{c}{\textbf{0.435}} \\
+\textbf{Distribution overlap} & \multicolumn{2}{c}{0.097} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The separation of 0.435 indicates the reward model provides meaningful discriminative signal on real data. The low overlap (9.7\%) means successful and failed trajectories receive substantially different rewards, enabling effective ranking.
+
+\textbf{Reward formulation comparison.} We compare four reward formulations:
+\begin{itemize}
+    \item \emph{Sparse}: Binary 0/1 based on final outcome (variance: 0.149)
+    \item \emph{Dense}: Continuous $P(\text{success})$ from classifier (variance: 0.047)
+    \item \emph{Shaped}: $P(\text{success}) + 0.1 \cdot \mathbf{1}[P > 0.8]$ (variance: 0.047)
+    \item \emph{Advantage}: $P(\text{success}) - \bar{P}$ (variance: 0.047)
+\end{itemize}
+
+Dense rewards exhibit 3$\times$ lower variance than sparse rewards, providing more stable learning signal. Additionally, dense rewards provide signal throughout the trajectory rather than only at termination, enabling more effective credit assignment.
+
+\textbf{API.} The reward model is packaged as a Python class:
+\begin{verbatim}
+rm = RewardModel.load('reward_model.pkl')
+reward = rm.score(trajectory_features)  # -> [0, 1]
+\end{verbatim}
+
+\subsection{Application: Curriculum Learning Signal}
+
+Not all tasks are equally valuable for training. We analyze task \textbf{informativeness}---how much a task contributes to learning the decision boundary between success and failure.
+
+\textbf{Methodology.} For each task, we compute:
+\begin{itemize}
+    \item \emph{Success rate}: Fraction of models that solved it
+    \item \emph{Model agreement}: 1 if unanimous, 0 if perfectly split
+    \item \emph{Classifier uncertainty}: $1 - |2P - 1|$ (highest at $P = 0.5$)
+    \item \emph{Informativeness}: Uncertainty $\times$ (1 - agreement)
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\caption{Task difficulty distribution (52 tasks, 4 models each)}
+\label{tab:curriculum}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Category} & \textbf{Count} & \textbf{Success Rate} & \textbf{Model Agreement} \\
+\midrule
+Easy ($\geq$75\%) & 5 & 75--100\% & High (unanimous) \\
+Medium (25--75\%) & 10 & 25--75\% & Mixed \\
+Hard ($\leq$25\%) & 37 & 0--25\% & High (all fail) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item \textbf{Most tasks are hard}: 71\% of tasks (37/52) have $\leq$25\% success rate
+    \item \textbf{Model disagreement is informative}: 18 tasks show disagreement between models---these are prime candidates for curriculum learning
+    \item \textbf{Boundary tasks}: Tasks with 50\% success rate (e.g., scikit-learn-30395, scikit-learn-30103) are most informative for training
+\end{itemize}
+
+\textbf{Curriculum ordering.} For training, we recommend: (1) Easy tasks first to build confidence, (2) Medium/boundary tasks to learn decision boundaries, (3) Hard tasks last for edge cases. Within each category, prioritize by informativeness.
+
+\subsection{Application: Contrastive Analysis}
+
+We identify which behavioral features most distinguish successful from failed trajectories using effect size analysis (Cohen's $d$).
+
+\begin{table}[h]
+\centering
+\caption{Top discriminative features (Cohen's $d$, significant at $p < 0.05$)}
+\label{tab:contrastive}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Feature} & \textbf{Cohen's $d$} & \textbf{Effect} & \textbf{Direction} \\
+\midrule
+tool\_errors\_occurred & $-1.64$ & large & ↓ in success \\
+no\_changes\_made & $-1.33$ & large & ↓ in success \\
+used\_str\_replace & $+1.17$ & large & ↑ in success \\
+submitted & $+1.11$ & large & ↑ in success \\
+trajectory\_efficiency & $+0.95$ & large & ↑ in success \\
+correct\_files\_touched & $+0.94$ & large & ↑ in success \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Recipe for success:}
+\begin{itemize}
+    \item \textbf{DO}: Use str\_replace for edits, submit solutions, maintain high trajectory efficiency, touch correct files, read before writing
+    \item \textbf{AVOID}: Tool errors (strongest predictor of failure), making no changes, modifying wrong files
+\end{itemize}
+
+The contrastive analysis reveals that \emph{how} agents work matters as much as \emph{what} they produce. Agents that avoid tool errors and actually make changes succeed; those that get stuck in exploration loops fail.
+
+\subsection{Application: Targeted Task Generation}
+
+We use the weakness analysis to automatically generate task specifications that target specific model deficiencies.
+
+\textbf{Model weakness profiles.} Analysis reveals distinct failure patterns:
+\begin{itemize}
+    \item \textbf{Claude Opus 4}: 100\% of failures involve making no changes; 98\% show low exploration efficiency
+    \item \textbf{GPT-4o}: 95\% of failures involve tool errors; 53\% skip verification
+    \item \textbf{GPT-5.1}: 97\% of failures involve tool errors
+    \item \textbf{o4-mini}: 100\% of failures involve tool errors; 63\% make no changes
+\end{itemize}
+
+\textbf{Generated assets.} We create 8 task templates across categories (exploration, implementation, debugging, verification) and 15 targeted task specifications. Each task includes difficulty rating, required skills, estimated steps, and rationale linking to the specific weakness being tested.
+
+\textbf{Sample template}: ``Deep Codebase Navigation'' (hard) targets low exploration efficiency by requiring agents to trace dependencies across multiple files to find a bug whose symptoms appear far from the root cause.
+
+\subsection{Application: Cross-Repository Transfer}
+
+We analyze how well behavioral features generalize across different task groups, simulating cross-repository transfer.
+
+\textbf{Methodology.} We split the 52 tasks into 4 pseudo-repositories and measure: (1) feature stability across groups, (2) train-on-one/test-on-another performance, and (3) leave-one-task-out cross-validation.
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item \textbf{40/59 features transfer well}: These ``universal'' features show low variance across task groups (stability score $< 0.5$)
+    \item \textbf{Transfer gap is small}: Same-group accuracy (99\%) vs cross-group accuracy (84\%) shows only 15\% degradation
+    \item \textbf{Strong generalization}: Leave-one-task-out CV achieves 94.2\% $\pm$ 13.5\% accuracy
+\end{itemize}
+
+\textbf{Most transferable features}: \texttt{tool\_errors\_occurred}, \texttt{submitted}, \texttt{used\_str\_replace}, \texttt{ran\_tests}---these behavioral signals generalize across task types.
+
+\textbf{Repo-specific features}: \texttt{exploration\_steps}, \texttt{files\_explored}---these depend on repository structure and may need recalibration.
+
+\subsection{Interactive Dashboard}
+
+We provide an interactive HTML dashboard that visualizes all analysis results in a single interface. The dashboard includes:
+\begin{itemize}
+    \item Model performance comparison with success rates and behavioral fingerprints
+    \item Best-of-N selection curves showing probability vs random vs oracle strategies
+    \item Contrastive analysis with effect sizes and ``recipe for success''
+    \item Curriculum learning task difficulty distribution
+    \item Cross-repository transfer performance matrix
+    \item Reward model signal quality visualization
+\end{itemize}
+
+The dashboard requires no server---it runs entirely in-browser using Plotly.js for interactive charts. This enables easy sharing of evaluation results with stakeholders.
 
 %==============================================================================
 \section{Conclusion}
